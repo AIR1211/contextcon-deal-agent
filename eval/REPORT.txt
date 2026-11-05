@@ -56,6 +56,21 @@ Social search returned results          3/13 tries   Used to discover reels, sto
 Decision: don't use plain-language Company Search as the main brand discovery route. Try Job Search for
 influencer roles in India first (not yet tested end to end). Instagram accounts under 10K remain untested.
 
+RUN 3 (results3.jsonl; 429 credits)
+Likelihood backtest, 160 brands: passed its pre-registered bar with 2.4x lift over the base rate, AUC 0.623.
+This is weak evidence: only 5 of 160 brands had influencer roles, and none of the 64 smallest did.
+The score used in that run has since changed, so the result doesn't describe the current version.
+Small accounts: 2 of 2 profiles at 1K-10K were readable. Social search found reels on 5 of 55 attempts.
+
+LABELLED OFFERS (labelled_offers.json, labelled_results.jsonl)
+First run, labels committed before scoring: 14 of 15 correct. All 5 bad-term offers and all 6 fakes were caught.
+The miss: a fair offer was flagged because a parser read the wrong number as the payment term. Since fixed, with a test.
+A re-run would no longer be independent, because the fix was tuned on this set.
+
+COMMIT REFERENCE
+labelled_results.jsonl records commit acdb42d. Its message was later edited, without changing its contents or date, and
+it is now ecac3bc. The log is left as written, because editing it would break its hash chain.
+
 LIMITS
 Expected answers come from public knowledge and weren't individually re-verified for this run.
 Sample sizes are small. Raw responses stay private because they include personal data; each log row has
