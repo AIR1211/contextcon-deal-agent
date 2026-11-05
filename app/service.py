@@ -1,4 +1,5 @@
 """Onboarding and matching for both dashboards. Private limits live in separate documents and never leave through public views."""
+import re
 import secrets
 
 from . import db, packages, scoring, tiebreak
@@ -63,16 +64,42 @@ def register_company(data: CompanyIn, bio_code_seen: bool = False) -> dict:
     return db.put('company', c['id'], c)
 
 
-def seed_brands(max_jobs=50, per_niche=15) -> dict:
+INTERMEDIARY = re.compile(r'\b(agency|agencies|advertis\w*|media|digital|marketing|consult\w*|staffing|recruit\w*|talent|resource\w*|infosol\w*|solutions|semantics|creators?|creative|studios?|influencer\w*|\bpr\b|hr)\b', re.I)
+
+
+def is_intermediary(name: str | None, industries=None) -> bool:
+    """An agency hiring for influencer roles is a rival, not a customer. Names are a rough filter, so this can miss some."""
+    if name and INTERMEDIARY.search(name):
+        return True
+    return any(x in str(industries or '').lower() for x in ('advertising', 'staffing', 'recruiting', 'marketing services', 'public relations'))
+
+
+def seed_brands(max_jobs=300, per_niche=25) -> dict:
     """Builds the company database: brands hiring for influencer roles, plus small brands found with a size filter."""
     seen = {b.get('company_id') for b in db.all_docs('company')}
-    added = {'from_jobs': 0, 'small_brands': 0}
-    jobs, ts = cd.influencer_jobs(max_jobs)
+    added = {'from_jobs': 0, 'small_brands': 0, 'agencies_skipped': 0}
+    jobs, ts = [], db.now()
+    cursor = None
+    while len(jobs) < max_jobs:
+        page, ts, cursor = cd.influencer_jobs(min(100, max_jobs - len(jobs)), cursor)
+        jobs += page
+        if not page or not cursor:
+            break
     counts = {}
     for j in jobs:
         b = ((j.get('company') or {}).get('basic_info') or {})
-        if b.get('crustdata_company_id'):
-            counts.setdefault(b['crustdata_company_id'], {'b': b, 'n': 0})['n'] += 1
+        if is_intermediary(b.get('name')):
+            added['agencies_skipped'] += 1
+            continue
+        cid = b.get('crustdata_company_id')
+        if not cid and b.get('primary_domain'):
+            try:
+                m, _ = cd.identify_domain(b['primary_domain'])
+                cid = m[0]['company_data']['crustdata_company_id'] if m else None
+            except Unavailable:
+                cid = None
+        if cid:
+            counts.setdefault(cid, {'b': b, 'n': 0})['n'] += 1
     for cid, x in counts.items():
         if cid not in seen:
             seen.add(cid)
@@ -107,19 +134,21 @@ def _brand_score(company: dict, niche: str, deep: bool) -> dict:
     return scoring.likelihood(company.get('signals') or scoring.brand_signals(enriched, roles, staff, text), niche)
 
 
-def matches(creator_id: str, deep_limit: int = 8) -> dict:
-    """Ranks brands. A free first pass picks who is worth paying to enrich. Rejected brands keep their reasons."""
+def matches(creator_id: str, deep_limit: int = 15) -> dict:
+    """Only brands assessed with the same evidence are compared, so missing data can't beat real data.
+    Results are cached, so each brand is paid for once. Rejected brands keep their reasons."""
     creator = db.get('creator', creator_id)
     niche = creator['niche']
-    brands = [b for b in db.all_docs('company') if b['status'] != 'blocked']
-    first = sorted(brands, key=lambda b: -_brand_score(b, niche, False)['score'])
+    brands = [b for b in db.all_docs('company') if b['status'] != 'blocked' and not is_intermediary(b.get('name'))]
+    words = NICHE_WORDS.get(niche, [])
+    candidates = [b for b in brands if b.get('niche') == niche or any(w in ' '.join(str(b.get(k) or '') for k in ('name', 'description')).lower() for w in words)]
     ranked, rejected = [], []
-    for i, b in enumerate(first):
-        s = _brand_score(b, niche, i < deep_limit)
+    for b in candidates[:deep_limit]:
+        s = _brand_score(b, niche, True)
         row = {'company_id': b['id'], 'name': b['name'], 'domain': b.get('domain'), 'status': b['status'], 'tier': b.get('tier'), 'likelihood': s['score'], 'confidence': s['confidence'], 'reasons': s['reasons'], 'size_range': b.get('size_range'), 'source': b.get('source')}
         (ranked if s['eligible'] else rejected).append(row)
     ranked = tiebreak.rank_brands(ranked, creator_id)
-    return {'matches': ranked[:20], 'rejected': rejected[:20], 'threshold': packages.A['match_threshold'], 'note': 'Likelihood weights are our judgement until real deals exist.'}
+    return {'matches': ranked[:20], 'rejected': rejected[:20], 'threshold': packages.A['match_threshold'], 'not_assessed': max(len(candidates) - deep_limit, 0), 'note': 'Likelihood weights are our judgement until real deals exist.'}
 
 
 def _scores(creator: dict, company: dict) -> tuple[int, int]:

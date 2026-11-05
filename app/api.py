@@ -5,7 +5,7 @@ from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from . import db, llm, orchestrator as orch, service
 from .crustdata import Unavailable
@@ -120,7 +120,7 @@ def company_creators(cid: str):
 
 
 @app.post('/api/companies/seed')
-def seed(max_jobs: int = 50, per_niche: int = 15):
+def seed(max_jobs: int = 300, per_niche: int = 25):
     try:
         return service.seed_brands(max_jobs, per_niche)
     except Unavailable as e:
@@ -128,7 +128,7 @@ def seed(max_jobs: int = 50, per_niche: int = 15):
 
 
 class BriefIn(BaseModel):
-    text: str
+    text: str = Field(max_length=8000)
 
 
 @app.post('/api/briefs')
@@ -224,4 +224,4 @@ def status():
         balance = service.cd.credits()
     except (Unavailable, KeyError, TypeError):
         balance = None
-    return {'llm_enabled': bool(llm.config.ANTHROPIC_KEY), 'crustdata_keys': len(service.cd.keys), 'credits_used_cached': db.credits_used(), 'credit_balance': balance}
+    return {'llm_enabled': bool(llm.config.ANTHROPIC_KEY), 'llm_usage': db.get('llm_usage', 'total') or {'calls': 0}, 'crustdata_keys': len(service.cd.keys), 'credits_used_cached': db.credits_used(), 'credit_balance': balance}

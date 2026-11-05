@@ -119,7 +119,7 @@ class Crustdata:
         if cursor:
             body['cursor'] = cursor
         d, ts = self.post('/job/search', body)
-        return _dict(d).get('job_listings') or [], ts
+        return _dict(d).get('job_listings') or [], ts, _dict(d).get('next_cursor')
 
     def jobs_at(self, company_id: int):
         body = {'filters': {'op': 'and', 'conditions': [{'field': 'company.basic_info.company_id', 'type': '=', 'value': company_id}, {'field': 'job_details.title', 'type': '[.]', 'value': 'influencer'}]}, 'fields': ['job_details.title'], 'limit': 5}

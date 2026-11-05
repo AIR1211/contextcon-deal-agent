@@ -2,20 +2,20 @@ BUILD PLAN - to the 7:00 AM code freeze
 Order is chosen so a working end-to-end deal exists early, and everything after improves it.
 
 PHASE 1  Foundation
-[ ] Shared models, SQLite store, Crustdata client (cache, retry, key rotation, fallback)
+[x] Shared models, SQLite store, Crustdata client (cache, retry, key rotation, fallback)
 PHASE 2  Engines
-[ ] Negotiation engine with property tests
-[ ] Verification ladder and alias table
-[ ] Creator reader, likelihood score, fit and confidence scores
-[ ] Packages, pricing, tweak deltas, bundles
-[ ] Contract and invoice generator, LLM layer with fallbacks
+[x] Negotiation engine with property tests
+[x] Verification ladder and alias table
+[x] Creator reader, likelihood score, fit and confidence scores
+[x] Packages, pricing, tweak deltas, bundles
+[x] Contract and invoice generator, LLM layer with fallbacks
 PHASE 3  End to end
-[ ] Orchestrator with crash resume and idempotent ledger
-[ ] API, plus company database seed
-[ ] Scenario tests: happy path, fake sender, contact left, crash, no overlap, bundle, no website
-[ ] Live run against real Crustdata data
+[x] Orchestrator with crash resume and idempotent ledger
+[x] API, plus company database seed
+[x] Scenario tests: happy path, fake sender, contact left, crash, no overlap, bundle, no website
+[x] Live run against real Crustdata data
 PHASE 4  Product
-[ ] Minimal frontend, replaced when the design system arrives
+[x] Minimal frontend, replaced when the design system arrives
 [ ] Company dashboard by teammate, against the API in docs/spec.txt
 PHASE 5  Submission (fixed times)
 3:00  Hardest case at the mentor checkpoint: contact leaves mid-deal

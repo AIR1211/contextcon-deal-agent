@@ -28,6 +28,8 @@ NON-FUNCTIONAL
 Crustdata calls are cached, retried on 429, and fall back to "can't verify" on failure.
 The LLM only reads and writes. Code decides. The product works without an LLM key using deterministic fallbacks.
 All maths is deterministic and tested. See docs/proofs.txt.
+Lean LLM use: rules run first, the model is asked only for missing fields, there are no agent loops, and identical
+prompts are cached. A full deal uses no LLM calls by default.
 Secrets stay in .env. Personal data from lookups stays out of the public repo.
 
 SHARED MODELS (app/models.py)
@@ -48,6 +50,7 @@ POST /api/creators/{id}/check-ownership    Check the bio code
 GET  /api/creators/{id}/matches            Ranked brands, rejected brands
 GET  /api/creators/{id}/packs/{company_id} Curated packs
 POST /api/creators/{id}/packs/{company_id}/tweak   Change terms, get deltas
+POST /api/creators/{id}/compare-offers     Rank several companies with the tiebreak chain
 POST /api/companies                        Register a company, returns verification
 GET  /api/companies/{id}/creators          Ranked creators and a suggested bundle
 POST /api/briefs                           Messy text to structured brief

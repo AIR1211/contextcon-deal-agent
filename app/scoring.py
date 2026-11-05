@@ -10,6 +10,14 @@ FIT_WEIGHTS = {'audience': 35, 'content': 25, 'attention': 20, 'past_sponsored':
 MIN_ENGAGEMENT = 0.001       # Assumption: below 0.1% suggests an inactive or inflated audience.
 
 
+SMALL_SIZES = {'myself only', '2-10', '11-50'}
+
+
+def _presence(n, base, step, small, none_small, none_large):
+    """Small brands rarely advertise influencer roles, so having none counts against them less."""
+    return min(base + step * n, 1.0) if n else (none_small if small else none_large)
+
+
 def _combine(weights: dict, factors: dict) -> tuple[int, int]:
     """factors: name -> (score 0..1 or None, evidence strength 0..1)."""
     score = sum(w * (0.5 if factors[k][0] is None else factors[k][0]) for k, w in weights.items())
@@ -43,10 +51,11 @@ def likelihood(sig: dict, niche: str, use_jobs: bool = True) -> dict:
     m = sig.get('months_since_funding')
     g = sig.get('headcount_growth')
     roles, staff, news = sig.get('influencer_roles'), sig.get('influencer_staff'), sig.get('recent_news')
+    small = sig.get('size_range') in SMALL_SIZES
     f = {
         'niche': (min(hits / 2, 1.0), 0.7),
-        'influencer_roles': ((min(roles / 3, 1.0), 1.0) if roles is not None else (None, 0)) if use_jobs else (None, 0),
-        'influencer_staff': (min(staff / 3, 1.0), 0.8) if staff is not None else (None, 0),
+        'influencer_roles': (_presence(roles, 0.6, 0.15, small, 0.35, 0.2), 1.0 if roles else 0.5) if use_jobs and roles is not None else (None, 0),
+        'influencer_staff': (_presence(staff, 0.5, 0.2, small, 0.4, 0.25), 0.8 if staff else 0.4) if staff is not None else (None, 0),
         'funding': (1.0 if m < 12 else 0.7 if m < 24 else 0.3, 0.9) if m is not None else (None, 0),
         'growth': (max(min(0.5 + g * 2, 1.0), 0.0), 0.8) if g is not None else (None, 0),
         'news': (min(news / 5, 1.0), 0.6) if news is not None else (None, 0),
@@ -81,7 +90,7 @@ def fit(creator: dict, company: dict) -> dict:
     """No follower minimum. Small creators compete on engagement and niche."""
     s = creator.get('stats') or {}
     strength = s.get('strength', 0.3)
-    er = s.get('engagement_rate')
+    er = None if s.get('engagement_anomalous') else s.get('engagement_rate')
     aud = creator.get('audience_country_pct')
     niche = company.get('niche') or creator.get('niche')
     share = niche_share((s.get('captions') or []) + [s.get('bio') or ''], niche)
@@ -100,5 +109,6 @@ def fit(creator: dict, company: dict) -> dict:
     if share: reasons.append(f'{round(share * 100)}% of checked content fits {niche}.')
     if er is not None: reasons.append(f'Engagement is {er:.1%} of followers, from {s.get("reels_read", 0)} recent reels.')
     if aud is not None: reasons.append(f'{aud}% audience in target country, self-reported.')
+    if s.get('engagement_anomalous'): reasons.append('Sampled posts look unusually viral for this account, so engagement is not used. Ask for analytics.')
     if conf < 50: reasons.append('Low confidence: ask for analytics before relying on this score.')
     return {'score': score, 'confidence': conf, 'gates_failed': failed, 'passes': not failed, 'reasons': reasons, 'source': s.get('source')}

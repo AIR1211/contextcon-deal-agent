@@ -19,6 +19,8 @@ def reel_rate(stats: dict) -> int:
     likes = stats.get('median_likes')
     if not likes:
         return A['minimum_reel_price_inr']
+    if stats.get('followers'):
+        likes = min(likes, stats['followers'] * A['max_likes_share_of_followers'])    # Stops one viral sample setting the price.
     return max(A['minimum_reel_price_inr'], round(likes * A['views_per_like'] * A['cpm_inr'] / 1000))
 
 

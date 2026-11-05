@@ -60,14 +60,19 @@ def read_profile(cd: Crustdata, handle: str, fresh=False) -> dict | None:
     return p and {**p, 'as_of': ts, 'url': url}
 
 
-def read_stats(cd: Crustdata, handle: str, max_reels=3) -> dict:
-    """About 1 + max_reels credits. Only reels that really belong to this handle count."""
+ANOMALOUS_ENGAGEMENT = 0.5   # Above 50% of followers, the sampled posts are probably not typical.
+
+
+def read_stats(cd: Crustdata, handle: str, max_reels=8) -> dict:
+    """About 1 + max_reels credits. Only reels that really belong to this handle count.
+    A profile's first posts are often pinned virals, so they are skipped when enough other posts exist."""
     handle = handle.strip().lstrip('@')
     p = read_profile(cd, handle)
     if not p:
         raise Unavailable('profile fields could not be read')
     reels = []
-    for pid in p['post_ids'][:max_reels * 2]:
+    ids = p['post_ids'][3:] if len(p['post_ids']) >= 6 else p['post_ids']
+    for pid in ids[:max_reels]:
         if len(reels) >= max_reels:
             break
         try:
@@ -87,4 +92,5 @@ def add_engagement(stats: dict, likes: list, comments: list) -> dict:
     stats['median_comments'] = statistics.median(comments) if comments else None
     f = stats.get('followers')
     stats['engagement_rate'] = round((stats['median_likes'] + (stats['median_comments'] or 0)) / f, 4) if f and likes else None
+    stats['engagement_anomalous'] = bool(stats['engagement_rate'] and stats['engagement_rate'] > ANOMALOUS_ENGAGEMENT)
     return stats

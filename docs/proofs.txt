@@ -13,7 +13,8 @@ Practical note: prices are whole rupees, so the result may be rounded down by un
 CLAIM 2  Choosing the highest surplus means no listed option beats it for both sides.
 Surplus S(t) = c(t) - r(t), and each side gets S(t)/2 at the midpoint. If option u gave both sides more than t*, then
 S(u) > S(t*), contradicting the choice of t*. QED
-Limit: this covers only listed options and stated limits.
+Limit: this covers only listed options and stated limits. Options meeting the requested terms are tried first, and the
+claim applies within whichever set settles.
 
 CLAIM 3  Nobody is pushed past their limit, including fees.
 Let fc, fb be the fee rates, C the creator cost and V the brand value.

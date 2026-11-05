@@ -206,6 +206,89 @@ def test_compare_offers_ranks_and_explains(world):
     assert r['offers'][0]['company_id'] == richer['id'] and r['offers'][0]['decided_by'] == 'Pays more'
 
 
+def test_requested_terms_are_kept_when_they_fit(world):
+    co = company(ceiling=20000, limits=CompanyLimits(ceiling=20000, value_per_reel=9000))
+    _, end = go([creator(floor=2000)['id']], co, terms=Terms(reels=1, stories=1, usage_days=60))
+    t = end['settlement']['terms']
+    assert t['stories'] >= 1 and t['usage_days'] >= 60 and 'terms_reduced' not in end
+
+
+def test_terms_shrink_only_when_requested_terms_do_not_fit(world):
+    co = company(ceiling=3000, limits=CompanyLimits(ceiling=3000, value_per_reel=3000, value_per_story=100))
+    _, end = go([creator(floor=2000)['id']], co, terms=Terms(reels=1, stories=4, usage_days=60))
+    assert end['state'] == 'done' or end.get('paused')
+
+
+def test_viral_samples_do_not_set_the_price():
+    from app.creators import add_engagement
+    s = add_engagement({'followers': 14000}, [343000, 454000, 151000], [4140, 2720, 398])
+    assert s['engagement_anomalous'] is True
+    assert packages.reel_rate(s) <= 14000 * 0.25 * 15 * 300 / 1000
+    f = scoring.fit({'niche': 'food', 'stats': {**s, 'strength': 0.7}}, {'niche': 'food'})
+    assert any('unusually viral' in r for r in f['reasons'])
+
+
+def test_pinned_posts_are_skipped_when_enough_exist(world):
+    from app.creators import read_stats
+    calls = []
+    orig = service.cd.fetch_page
+    def fake(url, fresh=False):
+        calls.append(url)
+        if '/reel/' in url:
+            return 'x', '<meta property="og:description" content="347 likes, 16 comments - acc on October 2, 2026: &quot;food&quot;" />', 'now'
+        links = ' '.join(f'/reel/POST{i:06d}/' for i in range(12))
+        return 'Acc (@acc)', '<meta property="og:description" content="14K Followers, 100 Following, 300 Posts - bio" />' + links, 'now'
+    service.cd.fetch_page = fake
+    s = read_stats(service.cd, 'acc')
+    service.cd.fetch_page = orig
+    assert not any('POST000000' in c or 'POST000002' in c for c in calls) and s['reels_read'] == 8 and s['median_likes'] == 347
+
+
+def test_agencies_are_not_customers():
+    for name in ('AD Mafiya Creative Agency', 'Zapplr Media', 'OnO Creators', 'Digital Web Solutions'):
+        assert service.is_intermediary(name)
+    for name in ('Plum', 'VMax Wellness', 'Good Guilt'):
+        assert not service.is_intermediary(name)
+
+
+def test_having_no_data_cannot_beat_having_data():
+    base = {'text': 'snack food brand', 'size_range': '2-10'}
+    known_zero = scoring.likelihood({**base, 'influencer_roles': 0, 'influencer_staff': 0}, 'food')
+    with_roles = scoring.likelihood({**base, 'influencer_roles': 2, 'influencer_staff': 1}, 'food')
+    assert with_roles['score'] > known_zero['score'] and with_roles['confidence'] > known_zero['confidence']
+
+
+def test_complete_brief_uses_no_llm_call(world, monkeypatch):
+    called = []
+    monkeypatch.setattr(llm, '_claude', lambda *a, **k: called.append(a) or None)
+    b = llm.parse_brief('From Snackly: budget 30k for 2 reels for our snack brand, 60 day usage. neha@snackly.in')
+    assert b['parsed_by'] == 'rules' and not b['missing'] and called == []
+
+
+def test_llm_is_asked_only_for_missing_fields(world, monkeypatch):
+    seen = {}
+    def fake(prompt, schema=None, max_tokens=0):
+        seen['fields'] = schema['required']
+        return '{"niche": "food"}' if 'niche' in schema['required'] else None
+    monkeypatch.setattr(llm, '_claude', fake)
+    b = llm.parse_brief('From Snackly: budget 30k. neha@snackly.in. Our chips launch needs a creator.')
+    assert seen['fields'] == ['niche'] and b['niche'] == 'food' and b['parsed_by'] == 'rules+llm'
+
+
+def test_a_full_deal_uses_no_llm_calls_by_default(world, monkeypatch):
+    called = []
+    monkeypatch.setattr(llm, '_claude', lambda *a, **k: called.append(a) or None)
+    _, end = go([creator()['id']], company())
+    assert end['state'] == 'done' and called == []
+
+
+def test_pitch_rewrite_that_changes_numbers_is_rejected(world, monkeypatch):
+    monkeypatch.setattr(llm.config, 'LLM_POLISH', True)
+    monkeypatch.setattr(llm, '_claude', lambda *a, **k: 'Wonderful offer: 99 reels!')
+    text = llm.pitch_text({'name': 'X', 'niche': 'food'}, [{'handle': 'a'}], {'reels': 1, 'stories': 0, 'usage_days': 30})
+    assert '99' not in text and 'AI agent' in text
+
+
 def test_minor_is_gated(world):
     d, end = go([creator(is_minor=True)['id']], company())
     assert end['state'] == 'blocked' and 'under 18' in end['final_reason']

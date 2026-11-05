@@ -139,7 +139,14 @@ def step_negotiate(deal):
         if deal['decisions'].get('new_floor') and c['id'] == deal['creator_ids'][0]:
             c['limits']['floor_reel'] = deal['decisions']['new_floor']
     opts = packages.options(creators, _limits(deal, company, creators, base), base, deal['tier'])
-    result = settle(opts, FEE_CREATOR, FEE_BRAND) if opts else None
+    # Requested terms come first. Only if nothing at that level fits does the engine try lighter versions.
+    full = [o for o in opts if o.terms['stories'] >= base.stories and o.terms['usage_days'] >= base.usage_days and o.terms['exclusivity_days'] >= base.exclusivity_days]
+    result = settle(full, FEE_CREATOR, FEE_BRAND) if full else None
+    if result is None and opts:
+        result = settle(opts, FEE_CREATOR, FEE_BRAND)
+        if result:
+            deal['terms_reduced'] = 'The requested terms did not fit both sides, so the closest lighter version was agreed.'
+            db.event(deal['id'], 'terms_reduced', {'to': result.terms})
     if result is None:
         if deal['decisions'].get('no_overlap') is None:
             raise Pause('no_overlap', "No version of this deal fits both sides. The other side's limit stays private. Lower your floor to try again?")
