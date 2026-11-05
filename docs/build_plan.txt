@@ -1,0 +1,34 @@
+BUILD PLAN - to the 7:00 AM code freeze
+Order is chosen so a working end-to-end deal exists early, and everything after improves it.
+
+PHASE 1  Foundation
+[ ] Shared models, SQLite store, Crustdata client (cache, retry, key rotation, fallback)
+PHASE 2  Engines
+[ ] Negotiation engine with property tests
+[ ] Verification ladder and alias table
+[ ] Creator reader, likelihood score, fit and confidence scores
+[ ] Packages, pricing, tweak deltas, bundles
+[ ] Contract and invoice generator, LLM layer with fallbacks
+PHASE 3  End to end
+[ ] Orchestrator with crash resume and idempotent ledger
+[ ] API, plus company database seed
+[ ] Scenario tests: happy path, fake sender, contact left, crash, no overlap, bundle, no website
+[ ] Live run against real Crustdata data
+PHASE 4  Product
+[ ] Minimal frontend, replaced when the design system arrives
+[ ] Company dashboard by teammate, against the API in docs/spec.txt
+PHASE 5  Submission (fixed times)
+3:00  Hardest case at the mentor checkpoint: contact leaves mid-deal
+5:00  Feature freeze
+6:00  Video recorded, first submission in
+6:30  README, diagram, form final
+7:00  Code freeze
+
+CUT ORDER IF LATE
+Outbound discovery depth -> package tiers -> bio code -> company dashboard polish.
+Never cut: verification statuses, ledger, crash resume, the end-to-end path.
+
+STILL OPEN
+A teammate's small Instagram account for the under-10K and accuracy test.
+Likelihood score backtest against job data.
+Who owns which role.

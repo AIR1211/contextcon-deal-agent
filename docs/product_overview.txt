@@ -9,12 +9,16 @@ Replaces: talent managers and influencer-marketing agencies.
 Who pays today: creators pay commission; brands pay retainers or campaign margins.
 Who is underserved: small creators and small brands, because small deals are not worth a person's time.
 Position: neutral broker. One published rule for both sides, private limits, disclosed fee on closed deals.
-Not yet decided by the team: neutral broker vs creator-side. This draft assumes neutral broker.
 
 END-TO-END FLOW
-1 Take the brief    2 Verify the brand and sender   3 Match creators      4 Build packages
-5 Pitch             6 Negotiate                     7 Contract            8 Deliver and collect
-Only outcomes of "can't verify", a limit breach or a non-standard clause go to a person.
+Creator side: register handle -> read public stats -> rank likely brands -> curated media pack per brand -> optional tweak.
+Company side: register domain or Instagram -> verify -> rank creators in the niche -> suggested bundle.
+Shared: pitch -> one negotiation engine -> contract -> re-check -> sign -> funds held -> deliver -> approve -> release -> invoice.
+A person is asked only on "can't verify", a contact who left, no overlap, or a non-standard clause.
+
+SMALL CREATORS AND COMPANIES (the main focus)
+No follower minimum. Creator bundles. Starter media kit. Barter check. Payment protection.
+No website required: Instagram, GSTIN or bio code, with stricter terms instead of rejection.
 
 FEATURES (score out of 5 is the team's judgement of value; status is the plan for tonight)
 AGENT
@@ -23,7 +27,8 @@ AGENT
 5 Build  Rules decide; the LLM only reads and writes
 5 Build  Mock brand negotiator with hidden limits
 4 Build  Package and pitch generator
-3 Later  Outbound brand discovery
+5 Build  Brand database and likelihood score
+5 Build  Creator bundles
 VERIFICATION
 5 Build  Source and date on every fact
 5 Build  Brand and domain check
@@ -93,7 +98,9 @@ DOCUMENTS THE TEAM KEEPS (short, and each answers a question judges ask)
 docs/product_overview.txt  What it is and what is in scope (this file)
 docs/spec.txt              Requirements, shared models, role split
 docs/decisions.txt         Each major choice, options weighed and why
-docs/demo_script.txt       The 2-minute demo, one page, with fallbacks
+docs/build_plan.txt        Order of work and cut order
+docs/proofs.txt            What the maths guarantees
+docs/demo_script.txt       The 2-minute demo, one page, with fallbacks (to write)
 NOTES.md                   What we tried and what happened
 eval/                      Pre-registered tests and results
 README.md                  Written last, from the files above

@@ -1,0 +1,31 @@
+DECISIONS - options weighed and why
+
+D1 Whose side?  Options: creator agent, brand agent, neutral broker.
+Chosen: neutral broker with one published rule. Brand-side needs creator data we lack. Creator-only leaves brands no
+reason to trust it. Cost: it cannot advocate for a creator who sets a low floor, so we add price guidance.
+
+D2 Where does the flow start?  Options: brand brief first, creator first.
+Chosen: creator first, with a company side too. Finding brands for small creators is the service nobody offers them.
+
+D3 Two negotiation engines or one?
+Chosen: one engine, two views. Two engines could disagree, and neither side could trust the result.
+
+D4 How is price set?  Options: LLM haggling, multi-round concessions, sealed limits with a fixed rule.
+Chosen: sealed limits with the midpoint, the Nash bargaining solution. It is deterministic and easy to explain.
+Limit: nobody can guarantee honest limits (Myerson-Satterthwaite). We say so.
+
+D5 Does a name match verify a sender?
+Tested: no. Run 1 found 4 same-name false matches, so a name match is only weak evidence.
+
+D6 How do we find brands?
+Tested: plain Company Search found known brands on 1 of 4 queries. Job Search finds brands already hiring for
+influencer roles but skews large. With a size filter, Company Search does return small brands. We use both.
+
+D7 Where does creator data come from?
+Tested: Web Fetch reads public Instagram pages; a direct request got nothing. Views are absent, so engagement uses likes
+and comments. Social search is too flaky for discovery, so creators register themselves.
+
+D8 Who decides, the LLM or code?
+Chosen: code. The same input must give the same answer. The LLM reads messy text and drafts messages, with a fallback.
+
+D9 Stack: FastAPI and SQLite in one process. Fast to build and easy to run. A real launch would need a proper queue.

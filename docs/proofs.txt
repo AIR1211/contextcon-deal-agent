@@ -1,0 +1,37 @@
+PROOFS - what the maths guarantees, and what it does not
+Tests: tests/test_engine.py checks these on thousands of random deals.
+
+NOTATION
+r = lowest price acceptable to the creator side, after fees.  c = highest price acceptable to the brand side, after fees.
+A deal is possible only if r <= c.
+
+CLAIM 1  The midpoint is the Nash bargaining solution.
+The creator gains (p - r) and the brand gains (c - p). Nash's solution maximises g(p) = (p - r)(c - p).
+g'(p) = c + r - 2p, which is 0 at p = (r + c)/2, and g''(p) = -2 < 0, so that is the unique maximum. QED
+Practical note: prices are whole rupees, so the result may be rounded down by under 1 rupee.
+
+CLAIM 2  Choosing the highest surplus means no listed option beats it for both sides.
+Surplus S(t) = c(t) - r(t), and each side gets S(t)/2 at the midpoint. If option u gave both sides more than t*, then
+S(u) > S(t*), contradicting the choice of t*. QED
+Limit: this covers only listed options and stated limits.
+
+CLAIM 3  Nobody is pushed past their limit, including fees.
+Let fc, fb be the fee rates, C the creator cost and V the brand value.
+r = ceil(C / (1 - fc)) and c = floor(V / (1 + fb)). With a whole-rupee p and r <= p <= c:
+Creator net = p - floor(p fc) = ceil(p (1 - fc)) >= C.
+Brand pays = p + ceil(p fb) = ceil(p (1 + fb)) <= V, because V is a whole number. QED
+
+CLAIM 4  In a bundle each creator keeps their limit, and the shares add up.
+Each creator receives r_i + a share of (p - sum r_i), with shares summing exactly to the difference. All shares are >= 0,
+so p_i >= r_i, and claim 3 applies to each creator. QED
+
+CLAIM 5  The rule is fair and repeatable.
+The result depends only on the numbers, not on who is named first or when the request arrived. Tested directly.
+
+WHAT WE CANNOT PROVE
+Honest limits: Myerson-Satterthwaite shows no mechanism is always efficient, voluntary, balanced and truth-telling.
+We keep the first three and reduce lying with evidence checks, but a side could still gain by misstating its limit.
+Likelihood score: weights are our judgement until real outcomes exist. See the backtest in eval/.
+Fit score: measures agreement with our rules, not campaign results.
+Close estimate and tweak deltas: model estimates, labelled as such in the product.
+CPM and views-per-like: assumptions in app/config.py, labelled in the product, to be replaced by real deal data.

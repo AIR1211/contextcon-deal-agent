@@ -1,0 +1,68 @@
+SPEC - ContextCon Deal Agent (6 Nov 2026)
+
+GOAL
+A small creator or small company comes in. The agent finds the other side, builds a media pack, negotiates,
+produces a contract and carries the deal to a paid invoice. A person is asked only when the answer changes the result.
+
+USERS
+Creator: registers a handle, sets limits once, and can tweak packs.
+Company: registers a domain or Instagram page, sets a budget, and approves, counters or signs.
+
+FUNCTIONAL REQUIREMENTS
+R1  Creator onboarding reads public Instagram stats through Web Fetch. Each stat is a Fact with source and date.
+R2  Account ownership is checked with a one-time code in the bio.
+R3  Brand database is built from Job Search (influencer roles in India) and Company Search (size filter).
+R4  Likelihood score ranks brands for a creator. Shows reasons, confidence, and rejected brands with reasons.
+R5  Fit score ranks creators for a company. Safety gates run first. Confidence is separate from fit.
+R6  Media packs are generated per brand. Tweaks return the change in price, fit and close estimate.
+R7  Bundles: one package can contain several creators, each with their own floor.
+R8  One shared negotiation engine serves both dashboards. Neither side ever sees the other's limit.
+R9  Verification returns: verified, weak_match, partly_verified, cannot_verify or blocked. A name match is only weak.
+R10 Brands with no website can reach partly_verified through Instagram, GSTIN or bio code. Stricter terms apply.
+R11 Contract generated only after gates pass: re-verification, disclosure clause, usage terms, funds held.
+R12 Deal runs step by step, resumes after a crash, and never sends or pays twice.
+R13 Every outgoing message goes to a mock outbox. Nothing reaches real people.
+R14 Escalation only on: cannot_verify, contact left, no overlap, non-standard clause.
+
+NON-FUNCTIONAL
+Crustdata calls are cached, retried on 429, and fall back to "can't verify" on failure.
+The LLM only reads and writes. Code decides. The product works without an LLM key using deterministic fallbacks.
+All maths is deterministic and tested. See docs/proofs.txt.
+Secrets stay in .env. Personal data from lookups stays out of the public repo.
+
+SHARED MODELS (app/models.py)
+Fact      subject, field, value, source, as_of, strength, url
+Creator   id, handle, niche, stats, facts, limits (private), autopilot, ownership_verified
+Company   id, name, domain, company_id, status, tier, facts, budget, limits (private), mode (simulated or human)
+Terms     reels, stories, usage_days, exclusivity_days, paid_ads, revisions
+Pack      creator_ids, company_id, terms, list_price, estimates
+Deal      id, state, creator_ids, company_id, terms, settlement, contract_hash, pending_question
+
+DEAL STATES
+verify -> pitch -> await_company -> negotiate -> contract -> recheck -> sign -> fund -> deliver -> approve -> release
+-> invoice -> done.  Also: paused (waiting on a person), blocked, no_deal.
+
+API (the company dashboard builds against this; full list at /docs when the server runs)
+POST /api/creators                         Onboard a creator
+POST /api/creators/{id}/check-ownership    Check the bio code
+GET  /api/creators/{id}/matches            Ranked brands, rejected brands
+GET  /api/creators/{id}/packs/{company_id} Curated packs
+POST /api/creators/{id}/packs/{company_id}/tweak   Change terms, get deltas
+POST /api/companies                        Register a company, returns verification
+GET  /api/companies/{id}/creators          Ranked creators and a suggested bundle
+POST /api/briefs                           Messy text to structured brief
+POST /api/deals                            Start a deal
+GET  /api/deals/{id}                       Deal state, with private limits removed
+GET  /api/deals/{id}/events                Live events (SSE)
+POST /api/deals/{id}/company-response      Company accepts, sets limits or declines
+POST /api/deals/{id}/decide                Answer a paused question
+POST /api/deals/{id}/deliver               Creator submits content
+POST /api/deals/{id}/approve               Company approves delivery
+POST /api/deals/{id}/resume                Resume after a crash
+GET  /api/outbox                           Mock outbox and action ledger
+
+FAKED, AND LABELLED IN THE UI
+Payments and escrow, e-signature, GSTIN lookup, email delivery, the simulated company, audience demographics.
+
+OUT OF SCOPE TONIGHT
+Real Instagram login, real payments, transcripts, outcome learning, multi-language contracts.
