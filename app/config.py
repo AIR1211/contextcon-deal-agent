@@ -40,6 +40,15 @@ ASSUMPTIONS = {
 # Our estimate of when each email would happen in a real deal, in days from the first pitch. Shown as an estimate.
 MAIL_DAYS = {'pitch': 0, 'reply': 2, 'quote': 2, 'counter': 3, 'agreed': 4, 'contract': 5, 'signed': 6, 'funded': 6, 'delivered': 13, 'approved': 14, 'paid': 14, 'invoice': 14}
 
+# Fit weights by campaign goal. Our judgement, adapted from the idea of goal-specific scoring profiles.
+FIT_PROFILES = {
+    'balanced': {'audience': 35, 'content': 25, 'attention': 20, 'past_sponsored': 10, 'reliability': 10},
+    'awareness': {'audience': 35, 'content': 15, 'attention': 30, 'past_sponsored': 10, 'reliability': 10},
+    'engagement': {'audience': 20, 'content': 25, 'attention': 40, 'past_sponsored': 5, 'reliability': 10},
+    'conversion': {'audience': 40, 'content': 20, 'attention': 15, 'past_sponsored': 15, 'reliability': 10},
+    'brand_building': {'audience': 25, 'content': 40, 'attention': 10, 'past_sponsored': 10, 'reliability': 15},
+}
+
 # Offer review limits. Each finding in app/offers.py cites one of these.
 OFFER_RULES = {'max_usage_days': 180, 'max_exclusivity_days': 90, 'max_payment_days': 45, 'max_revisions': 3, 'kill_fee_above': 20000}
 

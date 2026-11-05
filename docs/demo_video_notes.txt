@@ -1,0 +1,52 @@
+DEMO VIDEO: PRESENTER CUES (draft run)
+Video length about 1:51. No voice-over on the video. Timings are approximate; check them against the final cut.
+Pause while the waiting is trimmed: any stretch where a deal's progress does not change for over 2.5 seconds was cut. Say so if asked.
+
+SAY EARLY, AND KEEP VISIBLE
+"Company and people data are live from Crustdata. We play the brand. Email, signatures and payments are mocks."
+
+TIME   ON SCREEN                   SAY                                                                             POINT AT
+0:00   Title card                  "Avuno does the work of a creator agency, from first pitch to paid invoice."     The draft label
+0:05   Creator sign-up             "A creator comes in. Any niche, in their own words, any size of following."      Free-text niche field
+0:08   Brands ranked               "These are live Crustdata searches. Each brand gets a reason, and confidence     The "why" line, Confidence bar
+                                    is shown apart from the score, so you can see how much evidence there is."
+0:14   Find Nykaa, media pack      "She can target a brand herself. Prices are estimates, from her engagement.      "Did this tweak help?"
+                                    Change a term, and it shows whether that actually helps her."
+0:25   Auto Deal                   "Another creator turns on Auto Deal. It applies to brands above a bar she sets.  Auto Deal switch, "Sent by Auto Deal"
+                                    It never signs. The brand still chooses."
+0:31   Register as the brand       "Now the other side. Our team is playing Nykaa here."                            The form, typed live
+0:40   Verification result         "The company checks out. This sender doesn't, and a personal email proves        "Can't verify" next to "Verified"
+                                    nothing. So it says so, and it holds the money upfront."
+                                    PAUSE HERE. This is the trust moment.
+0:45   Offers                      "Ranked on fit and evidence, not follower count. Each has a reason, and it shows Reason line, "Ranked above next"
+                                    which rule decided the order. Both sides' limits stay private."
+0:52   Agent runs the deal         "Hands off now. It pulls company data, finds who to approach, negotiates by      Striped bar, live lookups in Activity
+                                    email, writes the contract, and re-checks live before anyone signs."
+1:03   Email thread                "A real deal takes about two weeks of email, so we show it in days. It's         Day labels, "Simulated" tags
+                                    compressed here, and the other side's replies are simulated."
+1:11   Sign                        "Signing waits for a person. The contract is fingerprinted, so any later change  Sign button, contract hash
+                                    shows up."
+1:17   Finished                    "This is the finished work: money released, invoice issued, and every action     Green banner, Action ledger
+                                    logged exactly once."
+1:25   Crash during payment        "Now we break it: it crashes right after paying out, before saving. That's the   Crash banner, Resume button
+                                    worst moment."
+1:40   Resumed                     "It resumes where it stopped. One payout, not two."                              "1 payout made, exactly once"
+1:46   Close                       "Every fact has a source and a date. When it can't check something, it says so." Close card
+
+DELIVERY
+Speak to the customer's problem, not the features: what got checked, what got finished.
+Let the two pauses land: "Can't verify" at 0:40 and "One payout, not two" at 1:40.
+If you run out of time, cut Auto Deal (0:25) first, then the tweak (0:14). Never cut the crash.
+
+LIKELY QUESTIONS
+Is any of this real? The data is. The brand, email, signatures and payments are simulated, and labelled on screen.
+Why not instant? Real lookups take time. A setting also slows steps so viewers can follow, and the page says so.
+Where is the AI? Code makes decisions, so the same case gets the same answer. An optional LLM only reads messy text. It hasn't been run live yet.
+Whose side are you on? Neither. One published rule, private limits, and a disclosed 5% fee from each side, only on closed deals.
+Can a side game its limit? Yes, in theory. No efficient mechanism can prevent it. We say so in docs/proofs.txt.
+What's not secure yet? There's no sign-in, so this isn't ready for real money. review.md lists the gaps.
+
+BEFORE THE FINAL CUT
+Replace the sample creators with teammates' accounts if you can. Do not show real outside creators applying to a brand.
+Check every number on screen against this file: the price and days may change between takes.
+Upload as one link, then test it in a private window. The submission needs it to play there.

@@ -13,6 +13,7 @@ DEFAULTS = {
         'auto_allow_partly_verified': True,
     },
     'company': {
+        'campaign_goal': 'balanced',     # Changes what creator fit weighs. See config.FIT_PROFILES.
         'write_contracts': True,         # Off: the deal pauses for the brand's own contract.
         'clause_kill_fee': True,
         'clause_arbitration': True,
@@ -37,7 +38,7 @@ DEFAULTS = {
         'ai_pitch_polish': False,        # Needs an API key. Off by default, because the template pitch uses no tokens.
     },
 }
-CHOICES = {'auto_pack': ('Starter', 'Standard', 'Campaign'), 'motion': ('auto', 'full', 'off')}
+CHOICES = {'auto_pack': ('Starter', 'Standard', 'Campaign'), 'motion': ('auto', 'full', 'off'), 'campaign_goal': ('balanced', 'awareness', 'engagement', 'conversion', 'brand_building')}
 
 
 def get(scope: str, id_: str = 'global') -> dict:

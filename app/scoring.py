@@ -4,9 +4,11 @@ from datetime import date
 
 from . import config
 from . import niche as niches
+from . import settings
+from .creators import sponsored_posts
 
 BRAND_WEIGHTS = {'niche': 25, 'influencer_roles': 25, 'influencer_staff': 15, 'funding': 15, 'growth': 10, 'news': 10}
-FIT_WEIGHTS = {'audience': 35, 'content': 25, 'attention': 20, 'past_sponsored': 10, 'reliability': 10}
+FIT_WEIGHTS = config.FIT_PROFILES['balanced']
 MIN_ENGAGEMENT = 0.001       # Assumption: below 0.1% suggests an inactive or inflated audience.
 
 
@@ -72,6 +74,12 @@ def likelihood(sig: dict, niche: str, use_jobs: bool = True, open_niche: bool = 
     return {'score': score, 'confidence': conf, 'reasons': reasons, 'factors': {k: v[0] for k, v in f.items()}, 'eligible': (hits >= 1 or open_niche) and score >= config.ASSUMPTIONS['match_threshold']}
 
 
+def _sponsor_score(marked: int, read: int) -> float:
+    """Some brand work shows experience. Too much suggests a saturated audience. None tells us little."""
+    share = marked / read
+    return 0.5 if share == 0 else 1.0 if share <= 0.4 else 0.6 if share <= 0.7 else 0.3
+
+
 def gates(creator: dict, company: dict) -> list[str]:
     """Hard stops. Any failure removes the match, however good the score."""
     failed = []
@@ -91,6 +99,8 @@ def fit(creator: dict, company: dict) -> dict:
     """Follower count isn't scored. Creators of any size compete on engagement, content and audience."""
     s = creator.get('stats') or {}
     strength = s.get('strength', 0.3)
+    marked, read = sponsored_posts(s.get('captions') or [])
+    goal = settings.get('company', company['id'])['campaign_goal'] if company.get('id') else 'balanced'
     er = None if s.get('engagement_anomalous') else s.get('engagement_rate')
     aud = creator.get('audience_country_pct')
     niche = company.get('niche') or creator.get('niche')
@@ -101,19 +111,22 @@ def fit(creator: dict, company: dict) -> dict:
         'audience': (aud / 100, 0.3) if aud is not None else (None, 0),
         'content': (share, strength) if share is not None else (None, 0),
         'attention': (min(er / 0.05, 1.0), strength) if er is not None else (None, 0),
-        'past_sponsored': (None, 0),
+        'past_sponsored': (_sponsor_score(marked, read), 0.5) if read >= 3 else (None, 0),
         'reliability': (None, 0),
     }
-    score, conf = _combine(FIT_WEIGHTS, f)
+    score, conf = _combine(config.FIT_PROFILES[goal], f)
     failed = gates(creator, company)
     reasons = []
     if share: reasons.append(f'{round(share * 100)}% of checked content fits {niche}.')
     if er is not None: reasons.append(f'Engagement is {round(er * 100 + 1e-9, 1)}% of followers, from {s.get("reels_read", 0)} recent reels.')
     if aud is not None: reasons.append(f'{aud}% audience in target country, self-reported.')
+    if read >= 3 and marked: reasons.append(f'{marked} of {read} recent posts are marked as sponsored.')
+    elif read >= 3: reasons.append(f'None of {read} recent posts are marked as sponsored.')
+    if goal != 'balanced': reasons.append(f"Scored for a {goal.replace('_', ' ')} campaign.")
     if s.get('engagement_anomalous'): reasons.append('Sampled posts look unusually viral for this account, so engagement is not used. Ask for analytics.')
     if not s.get('reels_read') and s.get('followers') is not None: reasons.append('No readable public posts, so engagement is unknown, not low.')
     if conf < 50: reasons.append('Low confidence: ask for analytics before relying on this score.')
-    return {'score': score, 'confidence': conf, 'gates_failed': failed, 'passes': not failed, 'reasons': reasons, 'source': s.get('source'), 'factors': {k: v[0] for k, v in f.items()}}
+    return {'score': score, 'confidence': conf, 'goal': goal, 'gates_failed': failed, 'passes': not failed, 'reasons': reasons, 'source': s.get('source'), 'factors': {k: v[0] for k, v in f.items()}}
 
 
 def _sentence(subject: str, good: list[str], caution: str | None, empty: str) -> str:

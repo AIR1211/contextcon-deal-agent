@@ -756,6 +756,56 @@ def test_lead_comes_from_crustdata_and_keeps_only_the_role(world):
     assert 'Influencer Marketing Lead at Real Brand (mock inbox)' in end['thread'][0]['to']
 
 
+def test_campaign_goal_changes_what_fit_weighs(world):
+    from app import settings
+    co = company()
+    engaged = {'id': 'a', 'handle': 'a', 'niche': 'food', 'audience_country_pct': 20, 'stats': {'engagement_rate': 0.05, 'strength': 0.7, 'captions': ['food'] * 3, 'reels_read': 3}}
+    well_placed = {'id': 'b', 'handle': 'b', 'niche': 'food', 'audience_country_pct': 95, 'stats': {'engagement_rate': 0.005, 'strength': 0.7, 'captions': ['food'] * 3, 'reels_read': 3}}
+    settings.update('company', co['id'], {'campaign_goal': 'engagement'})
+    assert scoring.fit(engaged, co)['score'] > scoring.fit(well_placed, co)['score']
+    settings.update('company', co['id'], {'campaign_goal': 'conversion'})
+    assert scoring.fit(well_placed, co)['score'] > scoring.fit(engaged, co)['score']
+    assert 'conversion' in ' '.join(scoring.fit(engaged, co)['reasons'])
+
+
+def test_every_goal_profile_totals_100():
+    from app.config import FIT_PROFILES
+    assert all(sum(p.values()) == 100 for p in FIT_PROFILES.values())
+
+
+def test_sponsored_history_is_counted_and_reported(world):
+    from app.creators import sponsored_posts
+    assert sponsored_posts(['#ad new serum', 'my day', 'Paid partnership with X', '']) == (2, 3)
+    assert sponsored_posts(['I had a salad', 'adventure time']) == (0, 2)
+    c = {'handle': 'x', 'niche': 'food', 'stats': {'strength': 0.7, 'captions': ['#ad one', 'two', 'three']}}
+    f = scoring.fit(c, {'niche': 'food'})
+    assert f['factors']['past_sponsored'] == 1.0 and any('1 of 3' in r for r in f['reasons'])
+    saturated = {'handle': 'y', 'niche': 'food', 'stats': {'strength': 0.7, 'captions': ['#ad a', '#ad b', '#ad c']}}
+    assert scoring.fit(saturated, {'niche': 'food'})['factors']['past_sponsored'] == 0.3
+
+
+def test_too_few_posts_gives_no_sponsored_signal():
+    c = {'handle': 'x', 'niche': 'food', 'stats': {'strength': 0.7, 'captions': ['#ad one']}}
+    assert scoring.fit(c, {'niche': 'food'})['factors']['past_sponsored'] is None
+
+
+def test_contract_carries_a_tracking_code(world):
+    _, end = go([creator()['id']], company())
+    assert end['tracking_code'].startswith('AVN-') and end['tracking_code'] in end['contract_text']
+
+
+def test_paid_lookups_are_rate_limited(world, monkeypatch):
+    from fastapi.testclient import TestClient
+    from app import api
+    monkeypatch.setattr(api, 'SPEND_LIMIT_PER_MINUTE', 2)
+    api._calls.clear()
+    client = TestClient(api.app)
+    codes = [client.get('/api/brands/search', params={'q': 'realbrand.in'}).status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
+    assert client.get('/health').json() == {'ok': True}
+    api._calls.clear()
+
+
 def test_minor_is_gated(world):
     d, end = go([creator(is_minor=True)['id']], company())
     assert end['state'] == 'blocked' and 'under 18' in end['final_reason']

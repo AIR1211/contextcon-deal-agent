@@ -5,7 +5,9 @@ import re
 import time
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from collections import defaultdict, deque
+
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -16,6 +18,7 @@ from .models import CompanyIn, CompanyLimits, CompanyResponse, CreatorIn, Creato
 
 app = FastAPI(title='Avuno')
 STATIC = Path(__file__).parent / 'static'
+SPEND_LIMIT_PER_MINUTE = 60
 
 
 class FreshStatic(StaticFiles):
@@ -27,6 +30,20 @@ class FreshStatic(StaticFiles):
 
 
 app.mount('/static', FreshStatic(directory=STATIC), name='static')
+
+
+_calls: dict = defaultdict(deque)
+
+
+def spend_limit(request: Request) -> None:
+    """Calls that can spend credits are limited per client. In-memory, so it resets on restart."""
+    who, t, q = (request.client.host if request.client else 'local'), time.time(), None
+    q = _calls[who]
+    while q and t - q[0] > 60:
+        q.popleft()
+    if len(q) >= SPEND_LIMIT_PER_MINUTE:
+        raise HTTPException(429, 'Too many lookups. Please wait a minute.')
+    q.append(t)
 
 
 def need(kind: str, id_: str) -> dict:
@@ -56,7 +73,13 @@ def home():
     return FileResponse(STATIC / 'index.html', headers={'Cache-Control': 'no-cache'})
 
 
-@app.post('/api/creators')
+@app.get('/health')
+def health():
+    db.conn().execute('SELECT 1')
+    return {'ok': True}
+
+
+@app.post('/api/creators', dependencies=[Depends(spend_limit)])
 def create_creator(data: CreatorIn, background: BackgroundTasks):
     """Answers at once. The read continues in the background; poll the creator for its progress."""
     c = service.begin_creator(data)
@@ -94,13 +117,13 @@ def write_limits(cid: str, x: CreatorLimits):
     return c['limits']
 
 
-@app.get('/api/creators/{cid}/matches')
+@app.get('/api/creators/{cid}/matches', dependencies=[Depends(spend_limit)])
 def creator_matches(cid: str):
     need('creator', cid)
     return service.matches(cid)
 
 
-@app.get('/api/brands/search')
+@app.get('/api/brands/search', dependencies=[Depends(spend_limit)])
 def brand_search(q: str):
     return service.search_brands(q)
 
@@ -204,7 +227,7 @@ def compare_offers(cid: str, x: CompareIn):
     return service.compare_offers(cid, x.company_ids, x.terms)
 
 
-@app.post('/api/companies')
+@app.post('/api/companies', dependencies=[Depends(spend_limit)])
 def create_company(data: CompanyIn):
     return service.register_company(data)
 
@@ -225,7 +248,7 @@ def company_creators(cid: str):
     return service.company_creators(cid)
 
 
-@app.post('/api/companies/seed')
+@app.post('/api/companies/seed', dependencies=[Depends(spend_limit)])
 def seed(niche: str | None = None, max_jobs: int = 300):
     try:
         return service.seed_brands(niche, max_jobs)
@@ -238,7 +261,7 @@ class OfferIn(BaseModel):
     creator_id: str | None = None
 
 
-@app.post('/api/offers/review')
+@app.post('/api/offers/review', dependencies=[Depends(spend_limit)])
 def review_offer(x: OfferIn):
     c = db.get('creator', x.creator_id) if x.creator_id else None
     return offers.review(x.text, ((c or {}).get('limits') or {}).get('floor_reel'), service.cd)

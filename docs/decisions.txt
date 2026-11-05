@@ -50,3 +50,5 @@ D16 Auto Deal thresholds: likelihood >= 55, confidence >= 40, verified or partly
 needed just to be shown, because it acts without asking. It only applies; the brand still chooses and signs.
 D17 Positioning: for creators and brands of any size. Follower count isn't scored or used in tiebreaks.
 D18 Time: a real deal takes days of email. Each deal shows its email thread with estimated days, labelled as simulated and compressed.
+D19 Ideas taken from open-source marketing projects, not code: goal-specific scoring, unknown is not failure, sponsored
+saturation as a signal, a measurement plan before launch, and funnel reporting. Not taken: bulk scraping, mailbox outreach.

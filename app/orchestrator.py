@@ -230,6 +230,7 @@ def step_contract(deal):
     if not cs['write_contracts'] and not deal.get('own_contract'):
         raise Pause('own_contract')
     text = deal.get('own_contract') or contract.render(deal, company, creators, cs)
+    deal['tracking_code'] = contract.tracking_code(deal)
     deal['contract_source'] = 'Supplied by the brand' if deal.get('own_contract') else 'Written by Avuno'
     deal['contract_text'], deal['contract_hash'] = text, contract.contract_hash(text)
     db.act(f"{deal['id']}:contract", deal['id'], 'contract_issued', {'sha256': deal['contract_hash']})

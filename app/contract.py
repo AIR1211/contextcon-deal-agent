@@ -7,6 +7,10 @@ from .config import FEE_BRAND, FEE_CREATOR
 NOTICE = 'DRAFT FOR A HACKATHON DEMO. Not legal advice. E-signature and escrow are mocked.'
 
 
+def tracking_code(deal: dict) -> str:
+    return 'AVN-' + deal['id'][-6:].upper()
+
+
 def gate_failures(deal: dict, company: dict, creators: list[dict]) -> list[str]:
     """Nothing is signed until each of these holds."""
     f = []
@@ -38,6 +42,7 @@ def render(deal: dict, company: dict, creators: list[dict], clauses: dict | None
         ('PAYMENT', f"{tier['upfront_pct']}% of the brand payment is held before work starts. The balance is due on delivery approval.\nHeld funds are released to the creator when the brand approves, or automatically 7 days after delivery with no objection.{kill}"),
         ('USAGE RIGHTS', f"The brand may reuse the content for {usage} days from first posting{', including paid advertising' if t.get('paid_ads') else ', organic use only'}.\nThe creator keeps ownership of the content."),
         ('EXCLUSIVITY', f'The creator will not promote direct competitors for {excl} days.' if excl else 'None.'),
+        ('MEASUREMENT', f"Links and captions carry the code {tracking_code(deal)}, so results can be attributed. The creator shares post analytics within 7 days of the usage period starting."),
         ('AD DISCLOSURE', 'All posts must clearly disclose the paid partnership, following ASCI influencer guidelines.'),
         ('TAX', 'Each party is responsible for its own taxes. GST and TDS details are shown on the invoice.'),
         ('DATA AND CONSENT', 'Each party consents to the processing of its data for this deal, and evidence is kept in the audit log.'),

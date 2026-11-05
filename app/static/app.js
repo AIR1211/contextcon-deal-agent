@@ -183,6 +183,7 @@ async function brandHome() {
   view.innerHTML = `<div class="head"><div><h1>${esc(co.name)}</h1><p class="muted">${co.status === 'blocked' ? 'This company cannot use Avuno.' : 'Verification sets your payment terms. Size never counts against you: evidence does the work.'}${co.also_known_as?.length ? ` Also known as ${esc(co.also_known_as.join(', '))}.` : ''}</p></div>${co.status === 'blocked' ? '' : `<a class="btn b1" href="#/creators">Find creators ${icon('arrow')}</a>`}</div>
   ${co.status === 'blocked' ? `<div class="ask bad"><div><h3>Blocked</h3><p class="small">${esc((co.reasons || []).join(' '))}</p></div></div><div class="mt"></div>` : ''}
   ${off.open.length ? `<div class="ask" style="margin-bottom:var(--s4)"><div><h3>${off.open.length} ${off.open.length === 1 ? 'creator has' : 'creators have'} applied</h3><p class="small">Each comes with a media pack, evidence and a reason.</p></div><a class="btn b1" href="#/offers">Review offers ${icon('arrow')}</a></div>` : ''}
+  <div class="grid g4" style="margin-bottom:var(--s4)">${[['Offers received', off.open.length + off.closed.length], ['Chosen', mine.length], ['Paid', mine.filter(d => d.state === 'done').length], ['Spent (mock)', money(mine.filter(d => d.state === 'done').reduce((n, d) => n + (d.settlement?.brand_pays || 0), 0))]].map(([l, v]) => `<div class="card tile"><div class="l">${l}</div><div class="v num">${v}</div></div>`).join('')}</div>
   <div class="split"><div class="stack"><div class="card"><div class="row between"><h3>Verification</h3><div class="row" style="gap:6px">${verifyBadge(co.status)}<span class="badge b-none">Tier ${esc(co.tier)}</span></div></div><ul class="why">${(co.reasons || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul></div>${dealList(mine, 'Your deals')}</div>
   <div class="stack"><div class="card evidence-card"><h3>Evidence</h3><div class="mt2">${factRows(co.facts)}</div></div><button class="btn b2" id="reset">Register another company</button></div></div>`;
   $('#reset').onclick = () => { S.company = null; route(); };
@@ -291,7 +292,7 @@ function paintDeal(d, { co, cs }, events) {
     <div class="card"><div class="row between"><h3>Who is ${esc(co.name)}?</h3>${verifyBadge(co.status)}</div><ul class="why">${(co.reasons || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul><div class="mt3">${factRows([...(co.facts || []), ...(d.facts || [])])}</div></div>
     ${d.recheck ? `<div class="card"><div class="row between"><h3>Re-check before signing</h3>${d.recheck.changed ? '<span class="badge b-warn"><i></i>Changed</span>' : '<span class="badge b-ok"><i></i>No change</span>'}</div><p class="small muted mt2">${esc(d.recheck.detail)} ${esc(day(d.recheck.at))}</p></div>` : ''}
     ${threadCard(d)}
-    ${d.contract_hash ? `<details class="card" data-k ${open ? 'open' : ''}><summary>Contract${d.contract_source ? ` · ${esc(d.contract_source)}` : ''}</summary><p class="cap faint mt2">SHA-256 <span class="mono">${esc(d.contract_hash)}</span></p><pre class="doc">${esc(d.contract_text)}</pre></details>` : ''}
+    ${d.contract_hash ? `<details class="card" data-k ${open ? 'open' : ''}><summary>Contract${d.contract_source ? ` · ${esc(d.contract_source)}` : ''}${d.tracking_code ? ` · Tracking code ${esc(d.tracking_code)}` : ''}</summary><p class="cap faint mt2">SHA-256 <span class="mono">${esc(d.contract_hash)}</span></p><pre class="doc">${esc(d.contract_text)}</pre></details>` : ''}
   </div><div class="stack"><div class="card"><h3 style="margin-bottom:var(--s3)">Activity</h3><ul class="time">${events.length ? events.filter(e => e.type !== 'step_started' && (APP.show_data_calls || e.type !== 'data_call')).map(e => { const m = EVENTS[e.type]; return `<li class="${['crashed', 'blocked', 'no_deal'].includes(e.type) ? 'e' : e.type === 'paused' ? 'w' : ''}">${esc(typeof m === 'function' ? m(e) : m || e.type)}<small>${esc(clock(e.ts))}</small></li>`; }).join('') : '<li class="w">Waiting for the first step…</li>'}</ul></div>
   <div class="card"><div class="row between"><h3>Action ledger</h3><span class="tag">Mock</span></div><p class="cap faint mt2">Each action has a unique key, so it can only happen once.</p><div class="mt2">${(d.actions || []).map(a => `<div class="kv small"><span>${esc(KIND[a.kind] || a.kind)}</span><b class="num">${a.payload.amount != null ? money(a.payload.amount) : a.payload.total != null ? money(a.payload.total) : ''}</b></div>`).join('') || '<p class="faint small">Nothing has happened yet.</p>'}</div></div></div></div>`;
 }
@@ -374,6 +375,8 @@ const SETTINGS = {
     ['auto_allow_partly_verified', 'Include partly verified brands', 'Brands with less public evidence. Money is always held upfront for them.'],
   ]],
   company: ['Brand', [
+    ['#', 'Campaign'],
+    ['campaign_goal', 'Campaign goal', 'Changes what creator fit weighs. Conversion favours audience match; engagement favours attention.', ['balanced', 'awareness', 'engagement', 'conversion', 'brand_building']],
     ['#', 'Contracts'],
     ['write_contracts', 'Write contracts for me', 'Avuno drafts the contract. Turn off to supply your own; it must still cover ad disclosure.'],
     ['clause_kill_fee', 'Include a kill fee clause', 'The creator keeps the amount held for work done if you cancel.'],
@@ -411,7 +414,7 @@ function settingRow(s, [k, l, h, a, b], vals) {
   if (k === '#') return `<div class="setgroup">${esc(l)}</div>`;
   const v = vals[k];
   const control = typeof v === 'boolean' ? `<label class="switch"><input type="checkbox" data-s="${s}" data-k="${k}" aria-label="${esc(l)}" ${v ? 'checked' : ''}><span></span></label>`
-    : Array.isArray(a) ? `<select data-s="${s}" data-k="${k}" aria-label="${esc(l)}">${a.map(o => `<option value="${o}" ${o === v ? 'selected' : ''}>${o[0].toUpperCase() + o.slice(1)}</option>`).join('')}</select>`
+    : Array.isArray(a) ? `<select data-s="${s}" data-k="${k}" aria-label="${esc(l)}">${a.map(o => `<option value="${o}" ${o === v ? 'selected' : ''}>${(o[0].toUpperCase() + o.slice(1)).replace('_', ' ')}</option>`).join('')}</select>`
     : `<input type="number" data-s="${s}" data-k="${k}" min="${a}" max="${b}" value="${v}" aria-label="${esc(l)}">`;
   return `<div class="setrow"><div><b class="small">${esc(l)}</b><small>${esc(h)}</small></div>${control}</div>`;
 }

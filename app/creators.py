@@ -84,3 +84,12 @@ def add_engagement(stats: dict, likes: list, comments: list) -> dict:
     stats['engagement_rate'] = round((stats['median_likes'] + (stats['median_comments'] or 0)) / f, 4) if f and likes else None
     stats['engagement_anomalous'] = bool(stats['engagement_rate'] and stats['engagement_rate'] > ANOMALOUS_ENGAGEMENT)
     return stats
+
+
+SPONSOR_MARKS = re.compile(r'#(?:ad|ads|sponsored|paidpartnership|paidpromotion|collab|gifted|partner)\b|paid partnership|sponsored by|in collaboration with', re.I)
+
+
+def sponsored_posts(captions: list[str]) -> tuple[int, int]:
+    """(posts that look sponsored, posts read). Only finds disclosed or marked posts, so it can undercount."""
+    read = [c for c in captions if c]
+    return sum(bool(SPONSOR_MARKS.search(c)) for c in read), len(read)
