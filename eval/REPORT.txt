@@ -47,6 +47,15 @@ CORRECTION TO EARLIER NOTES
 research/crustdata_features.txt says headcount ended Sep 2026. This run saw 2 Nov 2026 for the same field.
 The cause is unexplained. Show the date on every fact and don't assume freshness.
 
+RUN 2 (results2.jsonl; cases pushed in commit cebf6ac before the run; 25.38 credits)
+Company Search finds known brands       1/4 queries  Only boAt and Noise appeared, in the top 25
+Contact titles mostly relevant          5/8 brands   Whole Truth returned none
+Instagram reel fields parse             8/10         View counts absent on all 10
+Instagram profile fields parse          8/9          4 at 10K-100K, 4 above 100K, none under 10K
+Social search returned results          3/13 tries   Used to discover reels, stopping at first result per query
+Decision: don't use plain-language Company Search as the main brand discovery route. Try Job Search for
+influencer roles in India first (not yet tested end to end). Instagram accounts under 10K remain untested.
+
 LIMITS
 Expected answers come from public knowledge and weren't individually re-verified for this run.
 Sample sizes are small. Raw responses stay private because they include personal data; each log row has
