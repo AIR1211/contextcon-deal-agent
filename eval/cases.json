@@ -1,0 +1,101 @@
+{
+  "_about": "Committed and pushed before the run. Expected answers come from public knowledge, not from Crustdata. A failure can mean the API is wrong, our expectation is out of date, or the data is missing.",
+  "identify_real": ["boat-lifestyle.com","mamaearth.in","nykaa.com","beminimalist.co","sugarcosmetics.com","plumgoodness.com","wakefit.co","licious.in","thewholetruthfoods.com","yogabars.in","bombayshavingcompany.com","snitch.co.in","gonoise.com","lenskart.com","mcaffeine.com","nike.com","flipkart.com","zomato.com","myntra.com","thesouledstore.com","forestessentialsindia.com","bewakoof.com","chumbak.com","rarerabbit.in"],
+  "identify_fake": ["boat-collabs.co","boat-lifestyle-partners.com","nike-partnerships.net","mamaearth-india-collab.com","nykaa-influencer-team.in","zzqx-brand-deals.io","lenskart-creators.org","sugarcosmetics-collab.net","flipkart-brand-team.co","licious-influencers.in","plumgoodness-pr.com","zomato-creator-desk.com"],
+  "identify_format": [
+    {"input":"https://www.nykaa.com/","same_as":"nykaa.com"},
+    {"input":"WWW.NYKAA.COM","same_as":"nykaa.com"},
+    {"input":"nykaa.com/","same_as":"nykaa.com"},
+    {"input":"careers.nykaa.com","same_as":"nykaa.com"},
+    {"input":" nykaa.com ","same_as":"nykaa.com"}
+  ],
+  "identify_name": [
+    {"name":"boAt Lifestyle","domain":"boat-lifestyle.com"},
+    {"name":"BOAT LIFESTYLE PVT LTD","domain":"boat-lifestyle.com"},
+    {"name":"Mamaerth","domain":"mamaearth.in"},
+    {"name":"Nykaa","domain":"nykaa.com"},
+    {"name":"Lenskart Solutions","domain":"lenskart.com"},
+    {"name":"The Souled Store","domain":"thesouledstore.com"},
+    {"name":"Rare Rabbit","domain":"rarerabbit.in"},
+    {"name":"Bewakoof","domain":"bewakoof.com"},
+    {"name":"Imagine Marketing Limited","domain":"boat-lifestyle.com","kind":"parent"},
+    {"name":"Honasa Consumer","domain":"mamaearth.in","kind":"parent"},
+    {"name":"FSN E-Commerce Ventures","domain":"nykaa.com","kind":"parent"},
+    {"name":"Sprout Life Foods","domain":"yogabars.in","kind":"parent"}
+  ],
+  "enrich": [
+    {"domain":"boat-lifestyle.com","founded":2016},
+    {"domain":"mamaearth.in","founded":2016},
+    {"domain":"nykaa.com","founded":2012},
+    {"domain":"lenskart.com","founded":2010},
+    {"domain":"licious.in","founded":2015},
+    {"domain":"wakefit.co","founded":2016},
+    {"domain":"flipkart.com","founded":2007},
+    {"domain":"zomato.com","founded":2008},
+    {"domain":"snitch.co.in","founded":2020,"name_must_not_contain":"Support"},
+    {"domain":"mcaffeine.com","founded":2016}
+  ],
+  "freshness_max_age_days": 90,
+  "revenue_per_employee_max_usd": 1000000,
+  "person_current": [
+    {"name":"Aman Gupta","domain":"boat-lifestyle.com"},
+    {"name":"Varun Alagh","domain":"mamaearth.in"},
+    {"name":"Falguni Nayar","domain":"nykaa.com"},
+    {"name":"Vineeta Singh","domain":"sugarcosmetics.com"},
+    {"name":"Peyush Bansal","domain":"lenskart.com"},
+    {"name":"Shashank Mehta","domain":"thewholetruthfoods.com"},
+    {"name":"Mohit Yadav","domain":"beminimalist.co"},
+    {"name":"Shantanu Deshpande","domain":"bombayshavingcompany.com"},
+    {"name":"Abhay Hanjura","domain":"licious.in"},
+    {"name":"Ankit Garg","domain":"wakefit.co"}
+  ],
+  "person_wrong_company": [
+    {"name":"Aman Gupta","domain":"nike.com"},
+    {"name":"Varun Alagh","domain":"nykaa.com"},
+    {"name":"Falguni Nayar","domain":"lenskart.com"},
+    {"name":"Vineeta Singh","domain":"mamaearth.in"},
+    {"name":"Peyush Bansal","domain":"boat-lifestyle.com"},
+    {"name":"Shantanu Deshpande","domain":"licious.in"}
+  ],
+  "person_left": [
+    {"name":"Ashneer Grover","domain":"bharatpe.com"},
+    {"name":"Sachin Bansal","domain":"flipkart.com"},
+    {"name":"Binny Bansal","domain":"flipkart.com"},
+    {"name":"Rahul Yadav","domain":"housing.com"}
+  ],
+  "person_messy": [
+    {"variant":"aman gupta","domain":"boat-lifestyle.com","expect_found":true},
+    {"variant":"AMAN GUPTA","domain":"boat-lifestyle.com","expect_found":true},
+    {"variant":"Amman Gupta","domain":"boat-lifestyle.com","expect_found":true},
+    {"variant":"A. Gupta","domain":"boat-lifestyle.com","expect_found":true},
+    {"variant":"Zzqx Notaperson","domain":"boat-lifestyle.com","expect_found":false}
+  ],
+  "person_enrich": [
+    {"name":"Aman Gupta","domain":"boat-lifestyle.com","employer":"boAt"},
+    {"name":"Falguni Nayar","domain":"nykaa.com","employer":"Nykaa"},
+    {"name":"Peyush Bansal","domain":"lenskart.com","employer":"Lenskart"},
+    {"name":"Vineeta Singh","domain":"sugarcosmetics.com","employer":"SUGAR"},
+    {"name":"Ashneer Grover","domain":"bharatpe.com","employer":"BharatPe","past":true},
+    {"name":"Sachin Bansal","domain":"flipkart.com","employer":"Flipkart","past":true}
+  ],
+  "jobs_brand": ["boat-lifestyle.com","mamaearth.in","nykaa.com","lenskart.com","sugarcosmetics.com"],
+  "jobs_india_terms": ["influencer","creator partnerships"],
+  "posts": [
+    {"label":"brand_mentions","domain":"boat-lifestyle.com"},
+    {"label":"creator_demand_india","text":"looking for creators"},
+    {"label":"influencer_marketing_india","text":"influencer marketing"}
+  ],
+  "web_truth": [
+    {"query":"Minimalist skincare acquired by","source":"news","must_mention":"Unilever"},
+    {"query":"boAt Lifestyle parent company legal name","source":"web","must_mention":"Imagine Marketing"},
+    {"query":"Yoga Bar Sprout Life Foods acquired by","source":"news","must_mention":"ITC"},
+    {"query":"Mamaearth parent company","source":"web","must_mention":"Honasa"},
+    {"query":"Nykaa parent company","source":"web","must_mention":"FSN"}
+  ],
+  "web_social_repeat": ["food influencers India reel","instagram skincare influencer India","Indian fitness creator reel"],
+  "web_social_runs": 3,
+  "ig_discovery_queries": ["food influencers India reel","home cooking reel India","skincare routine reel India","street food vlog reel"],
+  "ig_max_reels": 12,
+  "ig_fake": ["zzqx_not_a_real_creator_9183","qqqq_fake_brand_collab_7741"],
+  "cap_credits": 250
+}

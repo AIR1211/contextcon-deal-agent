@@ -5,3 +5,4 @@ __pycache__/
 *.pdf
 node_modules/
 CLAUDE.md
+eval/raw/
