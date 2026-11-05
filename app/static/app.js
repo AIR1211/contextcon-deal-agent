@@ -370,4 +370,4 @@ async function settingsPage() {
   });
 }
 
-fx.logo(); foot(); api('/api/settings/app/global').then(a => { APP = a; }).catch(() => {}).finally(route);
+nav(); fx.logo(); foot(); api('/api/settings/app/global').then(a => { APP = a; }).catch(() => {}).finally(route);

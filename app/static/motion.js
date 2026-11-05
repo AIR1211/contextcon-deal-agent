@@ -26,7 +26,7 @@ window.fx = (() => {
   function page(root) {
     if (!on()) return;
     const items = root.querySelectorAll(':scope > .head, :scope > .card, :scope > .ask, :scope > form, :scope > details, :scope > .grid > *, :scope > .stack > *, :scope > .split > .stack > *, :scope > .onb > *, :scope > .selbar');
-    gsap.from(items, { autoAlpha: 0, y: 14, duration: 0.5, ease, stagger: { amount: Math.min(0.45, items.length * 0.04) }, clearProps: clear });
+    if (items.length) gsap.from(items, { autoAlpha: 0, y: 14, duration: 0.5, ease, stagger: { amount: Math.min(0.45, items.length * 0.04) }, clearProps: clear });
     meters(root);
     root.querySelectorAll('.tile .v, .hero-num, .stats3 b').forEach(el => count(el, 0.15));
   }
@@ -68,7 +68,7 @@ window.fx = (() => {
   function logo() {
     if (!on()) return;
     gsap.from('.logo svg', { y: 8, autoAlpha: 0, duration: 0.6, ease, clearProps: clear });
-    gsap.from('.nav a', { x: -8, autoAlpha: 0, duration: 0.35, ease, stagger: 0.04, delay: 0.1, clearProps: clear });
+    if (document.querySelector('.nav a')) gsap.from('.nav a', { x: -8, autoAlpha: 0, duration: 0.35, ease, stagger: 0.04, delay: 0.1, clearProps: clear });
   }
 
   return { page, fresh, grow, arrive, drawer, list, toast, logo, count };
