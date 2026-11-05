@@ -4,16 +4,20 @@ import secrets
 import threading
 
 from . import db, packages, scoring, tiebreak
+from . import config
 from .config import FEE_BRAND, FEE_CREATOR
 from .engine import settle
 from . import niche as niches
 from .creators import read_profile, read_stats, add_engagement
 from .crustdata import Crustdata, NotCached, Unavailable
 from .models import CANT, CompanyIn, CreatorIn, Fact, Terms
-from .verify import group_of, risk_tier, verify_brand, verify_sender
+from .verify import clean_domain, group_of, risk_tier, verify_brand, verify_sender
 
 cd = Crustdata()
 BACKGROUND = True
+SCORE_WINDOW = 60      # Strongest evidence first, so the rest of the database can't slow the page.
+_candidates: dict = {}
+_scores_memo: dict = {}
 _running: set[str] = set()
 _guard = threading.Lock()
 SEARCH_SIZES = ('2-10', '11-50', '51-200')      # Small brands first: the customers agencies skip.
@@ -23,24 +27,44 @@ def public_creator(c: dict) -> dict:
     return {k: v for k, v in c.items() if k not in ('limits', 'ownership_code')}
 
 
-def onboard_creator(data: CreatorIn) -> dict:
+def begin_creator(data: CreatorIn) -> dict:
+    """One handle stays one record. Registering again updates it."""
     handle = data.handle.strip().lstrip('@')
-    c = {'id': db.new_id('cr'), 'handle': handle, 'niche': data.niche, 'limits': data.limits.model_dump(), 'autopilot': data.autopilot, 'is_minor': data.is_minor,
-         'audience_country_pct': data.audience_country_pct, 'ownership_code': 'DEAL-' + secrets.token_hex(3).upper(), 'ownership_verified': False, 'facts': [], 'status': 'read', 'is_mock': bool(data.mock_stats)}
+    twin = next((x for x in db.all_docs('creator') if x['handle'].lower() == handle.lower()), None)
+    c = {'id': twin['id'] if twin else db.new_id('cr'), 'handle': handle, 'niche': data.niche, 'limits': data.limits.model_dump(), 'autopilot': data.autopilot, 'is_minor': data.is_minor,
+         'audience_country_pct': data.audience_country_pct, 'ownership_code': twin['ownership_code'] if twin else 'DEAL-' + secrets.token_hex(3).upper(), 'ownership_verified': bool(twin and twin.get('ownership_verified')), 'facts': [], 'status': 'reading', 'progress': 'Starting', 'stats': {}, 'is_mock': bool(data.mock_stats)}
+    return db.put('creator', c['id'], c)
+
+
+def finish_creator(creator_id: str, data: CreatorIn) -> dict:
+    c = db.get('creator', creator_id)
+    handle = c['handle']
+
+    def note(text):
+        c['progress'] = text
+        db.put('creator', creator_id, c)
     if data.mock_stats:
         m = dict(data.mock_stats)
         likes, comments = m.pop('likes', []), m.pop('comments', [])
         c['stats'] = add_engagement({**m, 'source': 'Labelled mock profile', 'strength': 0.3, 'reels_read': len(likes)}, likes, comments)
     else:
         try:
-            c['stats'] = read_stats(cd, handle)
+            c['stats'] = read_stats(cd, handle, progress=note)
         except Unavailable as e:
-            c.update(stats={'source': None, 'strength': 0}, status=CANT, read_error=str(e))
+            c.update(stats={'source': None, 'strength': 0}, read_error=str(e))
+            c['status'] = CANT
+    if c['status'] == 'reading':
+        c['status'] = 'read'
+    c['progress'] = None
     s = c['stats']
     for field in ('followers', 'engagement_rate', 'median_likes', 'median_comments'):
         if s.get(field) is not None:
-            c['facts'].append(Fact(subject='@' + handle, field=field, value=s[field], source=s['source'], url=s.get('url'), as_of=s.get('as_of') or c.get('as_of') or db.now(), strength='partly_verified', is_mock=c['is_mock']).model_dump())
-    return db.put('creator', c['id'], c)
+            c['facts'].append(Fact(subject='@' + handle, field=field, value=s[field], source=s['source'], url=s.get('url'), as_of=s.get('as_of') or db.now(), strength='partly_verified', is_mock=c['is_mock']).model_dump())
+    return db.put('creator', creator_id, c)
+
+
+def onboard_creator(data: CreatorIn) -> dict:
+    return finish_creator(begin_creator(data)['id'], data)
 
 
 def check_ownership(creator_id: str) -> dict:
@@ -66,6 +90,8 @@ def register_company(data: CompanyIn, bio_code_seen: bool = False) -> dict:
     c = {'id': twin['id'] if twin else db.new_id('co'), 'also_known_as': names, 'name': v['name'] or data.name, 'niche': data.niche, 'domain': v['domain'], 'company_id': v['company_id'], 'group': v['group'], 'status': v['status'], 'sender_status': sender['status'],
          'sender_name': data.sender_name, 'sender_email': data.sender_email, 'sender_profile_url': data.sender_profile_url, 'tier': tier, 'facts': v['facts'] + sender['facts'], 'reasons': v['reasons'] + sender['reasons'],
          'budget': data.budget, 'gstin': data.gstin, 'instagram': data.instagram, 'mode': data.mode, 'source': 'registered'}
+    if twin:
+        c = {**twin, **c}
     if data.limits:
         db.put('company_limits', c['id'], data.limits.model_dump())
     elif data.budget and data.mode == 'simulated':
@@ -158,7 +184,11 @@ def _brand_score(company: dict, niche: str, deep: bool, cached_only: bool = Fals
 
 
 def candidates_for(niche: str) -> list[dict]:
-    brands = [b for b in db.all_docs('company') if b['status'] != 'blocked' and not is_intermediary(b.get('name'))]
+    docs = db.all_docs('company')
+    key = (config.DB_PATH, niches.norm(niche), len(docs), docs[-1]['id'] if docs else '', _docs_stamp())
+    if key in _candidates:
+        return _candidates[key]
+    brands = [b for b in docs if b['status'] != 'blocked' and not is_intermediary(b.get('name'))]
     scored = []
     for b in brands:
         evidence = niches.hits(niche, ' '.join(str(b.get(k) or '') for k in ('name', 'description', 'industry')))
@@ -166,7 +196,14 @@ def candidates_for(niche: str) -> list[dict]:
             scored.append((evidence, b))
     # Strongest evidence first, so paid lookups go to the most relevant brands, not the oldest records.
     scored.sort(key=lambda x: (-x[0], str(x[1].get('name'))))
-    return [b for _, b in scored]
+    if len(_candidates) > 200:
+        _candidates.clear()
+    _candidates[key] = [b for _, b in scored]
+    return _candidates[key]
+
+
+def _docs_stamp() -> str:
+    return db.conn().execute("SELECT COALESCE(MAX(updated),'') FROM docs WHERE kind='company'").fetchone()[0]
 
 
 def assess(brands: list[dict], niche: str) -> None:
@@ -211,13 +248,18 @@ def matches(creator_id: str, limit: int = 15) -> dict:
     if open_niche:
         candidates = [b for b in db.all_docs('company') if b.get('source') == 'job_search' and b['status'] != 'blocked' and not is_intermediary(b.get('name'))]
     ranked, rejected, pending = [], [], []
-    for b in candidates:
-        with cd.cache_only():
-            s = _brand_score(b, niche, True, cached_only=True, open_niche=open_niche)
+    for b in candidates[:SCORE_WINDOW]:
+        memo_key = (config.DB_PATH, b['id'], niches.norm(niche), open_niche)
+        s = _scores_memo.get(memo_key)
+        if s is None:
+            with cd.cache_only():
+                s = _brand_score(b, niche, True, cached_only=True, open_niche=open_niche)
+            if s is not None:
+                _scores_memo[memo_key] = s
         if s is None:
             pending.append(b)
             continue
-        row = {'company_id': b['id'], 'name': b['name'], 'domain': b.get('domain'), 'status': b['status'], 'tier': b.get('tier'), 'likelihood': s['score'], 'confidence': s['confidence'], 'reasons': s['reasons'], 'size_range': b.get('size_range'), 'source': b.get('source')}
+        row = {'why': scoring.why_brand(b['name'], s, b['status']), 'company_id': b['id'], 'name': b['name'], 'domain': b.get('domain'), 'status': b['status'], 'tier': b.get('tier'), 'likelihood': s['score'], 'confidence': s['confidence'], 'reasons': s['reasons'], 'size_range': b.get('size_range'), 'source': b.get('source')}
         (ranked if s['eligible'] else rejected).append(row)
     # Keep scoring until there are enough real matches, not just enough looked-at brands.
     todo = pending[:max(min(limit - len(ranked), 15), 0)]
@@ -231,7 +273,10 @@ def matches(creator_id: str, limit: int = 15) -> dict:
 
 
 def _scores(creator: dict, company: dict) -> tuple[int, int]:
-    return _brand_score(company, creator['niche'], False)['score'], scoring.fit(creator, company)['score']
+    """Uses company data already held, so packs open at once and agree with the Brands page."""
+    with cd.cache_only():
+        s = _brand_score(company, creator['niche'], True, cached_only=True)
+    return (s or _brand_score(company, creator['niche'], False))['score'], scoring.fit(creator, company)['score']
 
 
 def packs(creator_id: str, company_id: str) -> dict:
@@ -259,7 +304,7 @@ def company_creators(company_id: str, base: Terms = Terms()) -> dict:
         if co.get('niche') and not niches.related(c.get('niche'), co['niche']):
             continue
         f = scoring.fit(c, co)
-        row = {'creator_id': c['id'], 'handle': c['handle'], 'niche': c['niche'], 'followers': (c.get('stats') or {}).get('followers'), 'engagement_rate': (c.get('stats') or {}).get('engagement_rate'), 'fit': f['score'], 'confidence': f['confidence'], 'reasons': f['reasons'], 'list_price_estimate': packages.list_price(c, base), 'is_mock': c.get('is_mock'), 'deals_done': done.get(c['id'], 0)}
+        row = {'creator_id': c['id'], 'handle': c['handle'], 'niche': c['niche'], 'followers': (c.get('stats') or {}).get('followers'), 'engagement_rate': (c.get('stats') or {}).get('engagement_rate'), 'fit': f['score'], 'confidence': f['confidence'], 'reasons': f['reasons'], 'list_price_estimate': packages.list_price(c, base), 'is_mock': c.get('is_mock'), 'deals_done': done.get(c['id'], 0), 'why': scoring.why_creator(c, f, co)}
         if f['passes']:
             rows.append(row)
         else:
@@ -291,3 +336,26 @@ def compare_offers(creator_id: str, company_ids: list[str], base: Terms = Terms(
             continue
         offers.append({'company_id': cid, 'name': co['name'], 'net': s.creator_net[creator_id], 'tier': tier, 'upfront_pct': packages.TIERS[tier]['upfront_pct'], 'exclusivity_days': s.terms.get('exclusivity_days', 0), 'usage_days': s.terms.get('usage_days', 30), 'fit': scoring.fit(c, co)['score'], 'offered_at': i, 'terms': s.terms})
     return {'offers': tiebreak.rank_offers(offers, creator_id), 'no_offer': none}
+
+
+def search_brands(q: str) -> list[dict]:
+    """Find a specific brand by name or domain, using the free identify lookup. Adds it to the database if new."""
+    q = q.strip()
+    domain = clean_domain(q) if '.' in q else None
+    try:
+        m = cd.identify_domain(domain)[0] if domain else cd.identify_name(q)[0]
+    except Unavailable:
+        m = []
+    docs = db.all_docs('company')
+    out = []
+    for x in m[:4]:
+        b, cid = x['company_data']['basic_info'], x['company_data']['crustdata_company_id']
+        if not b.get('primary_domain') or x.get('confidence_score', 0) < 0.6:
+            continue
+        doc = next((d for d in docs if d.get('company_id') == cid), None)
+        if not doc:
+            i = db.new_id('co')
+            doc = db.put('company', i, {'id': i, 'name': b.get('name'), 'domain': b.get('primary_domain'), 'company_id': cid, 'status': 'verified', 'sender_status': CANT, 'tier': 'B', 'niche': '', 'mode': 'simulated', 'source': 'lookup', 'description': b.get('description'), 'group': (group_of(b.get('name'), b.get('primary_domain')) or {}).get('group'),
+                                    'facts': [Fact(subject=b.get('name') or str(cid), field='company', value=b.get('name'), source='Crustdata Company Identify').model_dump()]})
+        out.append({'company_id': doc['id'], 'name': doc['name'], 'domain': doc.get('domain'), 'status': doc['status'], 'description': (doc.get('description') or '')[:140]})
+    return out

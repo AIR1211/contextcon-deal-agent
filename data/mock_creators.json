@@ -1,8 +1,290 @@
 [
-  {"handle": "demo_ghar_ka_khana", "niche": "food", "limits": {"floor_reel": 1800}, "audience_country_pct": 92, "mock_stats": {"followers": 6200, "following": 410, "posts": 240, "likes": [310, 280, 365, 295], "comments": [24, 18, 31, 22], "bio": "Home recipes from Lucknow", "captions": ["Easy dal recipe", "Street food at home", "Snack ideas for chai", "Kitchen basics"]}},
-  {"handle": "demo_chai_and_chaat", "niche": "food", "limits": {"floor_reel": 2200}, "audience_country_pct": 88, "mock_stats": {"followers": 18400, "following": 620, "posts": 410, "likes": [720, 840, 690, 910], "comments": [40, 55, 38, 61], "bio": "Street food stories", "captions": ["Best chaat in Kanpur", "Street food tour", "Trying a new snack", "Chai recipe"]}},
-  {"handle": "demo_tiffin_tales", "niche": "food", "limits": {"floor_reel": 1200}, "audience_country_pct": 95, "mock_stats": {"followers": 3100, "following": 300, "posts": 96, "likes": [210, 260, 190, 240], "comments": [19, 26, 14, 21], "bio": "Weekly tiffin recipes", "captions": ["Tiffin recipe for kids", "Quick lunch", "Healthy snack", "Cook with me"]}},
-  {"handle": "demo_glow_with_isha", "niche": "beauty", "limits": {"floor_reel": 2000}, "audience_country_pct": 90, "mock_stats": {"followers": 9800, "following": 530, "posts": 310, "likes": [430, 510, 380, 465], "comments": [33, 41, 27, 36], "bio": "Honest skincare reviews", "captions": ["Serum review", "Skin barrier routine", "Budget makeup", "Hair care tips"]}},
-  {"handle": "demo_desi_derma_notes", "niche": "beauty", "limits": {"floor_reel": 1500}, "audience_country_pct": 94, "mock_stats": {"followers": 4700, "following": 280, "posts": 150, "likes": [260, 240, 295, 310], "comments": [28, 22, 30, 35], "bio": "Skincare for Indian skin", "captions": ["Sunscreen test", "Skin routine", "Glow without makeup", "Beauty myths"]}},
-  {"handle": "demo_kanpur_lifts", "niche": "fitness", "limits": {"floor_reel": 1600}, "audience_country_pct": 89, "mock_stats": {"followers": 7500, "following": 350, "posts": 205, "likes": [340, 390, 300, 420], "comments": [22, 29, 19, 33], "bio": "Gym and protein on a budget", "captions": ["Gym routine", "Protein on a budget", "Workout for beginners", "Yoga stretch"]}}
+ {
+  "handle": "demo_ghar_ka_khana",
+  "niche": "food",
+  "limits": {
+   "floor_reel": 1800
+  },
+  "audience_country_pct": 92,
+  "mock_stats": {
+   "followers": 6200,
+   "following": 410,
+   "posts": 240,
+   "likes": [
+    310,
+    280,
+    365,
+    295
+   ],
+   "comments": [
+    24,
+    18,
+    31,
+    22
+   ],
+   "bio": "Home recipes from Lucknow",
+   "captions": [
+    "Easy dal recipe",
+    "Street food at home",
+    "Snack ideas for chai",
+    "Kitchen basics"
+   ]
+  }
+ },
+ {
+  "handle": "demo_chai_and_chaat",
+  "niche": "food",
+  "limits": {
+   "floor_reel": 2200
+  },
+  "audience_country_pct": 88,
+  "mock_stats": {
+   "followers": 18400,
+   "following": 620,
+   "posts": 410,
+   "likes": [
+    720,
+    840,
+    690,
+    910
+   ],
+   "comments": [
+    40,
+    55,
+    38,
+    61
+   ],
+   "bio": "Street food stories",
+   "captions": [
+    "Best chaat in Kanpur",
+    "Street food tour",
+    "Trying a new snack",
+    "Chai recipe"
+   ]
+  }
+ },
+ {
+  "handle": "demo_tiffin_tales",
+  "niche": "food",
+  "limits": {
+   "floor_reel": 1200
+  },
+  "audience_country_pct": 95,
+  "mock_stats": {
+   "followers": 3100,
+   "following": 300,
+   "posts": 96,
+   "likes": [
+    210,
+    260,
+    190,
+    240
+   ],
+   "comments": [
+    19,
+    26,
+    14,
+    21
+   ],
+   "bio": "Weekly tiffin recipes",
+   "captions": [
+    "Tiffin recipe for kids",
+    "Quick lunch",
+    "Healthy snack",
+    "Cook with me"
+   ]
+  }
+ },
+ {
+  "handle": "demo_glow_with_isha",
+  "niche": "beauty",
+  "limits": {
+   "floor_reel": 2000
+  },
+  "audience_country_pct": 90,
+  "mock_stats": {
+   "followers": 9800,
+   "following": 530,
+   "posts": 310,
+   "likes": [
+    430,
+    510,
+    380,
+    465
+   ],
+   "comments": [
+    33,
+    41,
+    27,
+    36
+   ],
+   "bio": "Honest skincare reviews",
+   "captions": [
+    "Serum review",
+    "Skin barrier routine",
+    "Budget makeup",
+    "Hair care tips"
+   ]
+  }
+ },
+ {
+  "handle": "demo_desi_derma_notes",
+  "niche": "beauty",
+  "limits": {
+   "floor_reel": 1500
+  },
+  "audience_country_pct": 94,
+  "mock_stats": {
+   "followers": 4700,
+   "following": 280,
+   "posts": 150,
+   "likes": [
+    260,
+    240,
+    295,
+    310
+   ],
+   "comments": [
+    28,
+    22,
+    30,
+    35
+   ],
+   "bio": "Skincare for Indian skin",
+   "captions": [
+    "Sunscreen test",
+    "Skin routine",
+    "Glow without makeup",
+    "Beauty myths"
+   ]
+  }
+ },
+ {
+  "handle": "demo_kanpur_lifts",
+  "niche": "fitness",
+  "limits": {
+   "floor_reel": 1600
+  },
+  "audience_country_pct": 89,
+  "mock_stats": {
+   "followers": 7500,
+   "following": 350,
+   "posts": 205,
+   "likes": [
+    340,
+    390,
+    300,
+    420
+   ],
+   "comments": [
+    22,
+    29,
+    19,
+    33
+   ],
+   "bio": "Gym and protein on a budget",
+   "captions": [
+    "Gym routine",
+    "Protein on a budget",
+    "Workout for beginners",
+    "Yoga stretch"
+   ]
+  }
+ },
+ {
+  "handle": "demo_thrift_with_tara",
+  "niche": "fashion",
+  "limits": {
+   "floor_reel": 2500
+  },
+  "audience_country_pct": 91,
+  "mock_stats": {
+   "followers": 14200,
+   "following": 610,
+   "posts": 330,
+   "likes": [
+    620,
+    710,
+    580,
+    690
+   ],
+   "comments": [
+    44,
+    52,
+    39,
+    48
+   ],
+   "bio": "Thrift fashion and styling on a budget",
+   "captions": [
+    "Thrift fashion haul",
+    "Styling one outfit three ways",
+    "Budget fashion finds",
+    "Street style in Delhi"
+   ]
+  }
+ },
+ {
+  "handle": "demo_saree_stories",
+  "niche": "fashion",
+  "limits": {
+   "floor_reel": 1800
+  },
+  "audience_country_pct": 96,
+  "mock_stats": {
+   "followers": 5600,
+   "following": 290,
+   "posts": 180,
+   "likes": [
+    340,
+    390,
+    300,
+    360
+   ],
+   "comments": [
+    31,
+    36,
+    24,
+    33
+   ],
+   "bio": "Everyday saree styling",
+   "captions": [
+    "Saree styling fashion",
+    "Handloom outfit of the day",
+    "Fashion for office",
+    "Draping tutorial"
+   ]
+  }
+ },
+ {
+  "handle": "demo_campus_fits",
+  "niche": "fashion",
+  "limits": {
+   "floor_reel": 1400
+  },
+  "audience_country_pct": 93,
+  "mock_stats": {
+   "followers": 8900,
+   "following": 720,
+   "posts": 240,
+   "likes": [
+    510,
+    470,
+    560,
+    530
+   ],
+   "comments": [
+    38,
+    29,
+    44,
+    41
+   ],
+   "bio": "College fashion under 999",
+   "captions": [
+    "Campus fashion haul",
+    "Outfit ideas for college",
+    "Streetwear under 999",
+    "Style tips"
+   ]
+  }
+ }
 ]

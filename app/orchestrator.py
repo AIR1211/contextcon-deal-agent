@@ -8,7 +8,7 @@ from . import contract, db, llm, packages
 from .config import FEE_BRAND, FEE_CREATOR, TIERS
 from .crustdata import Unavailable
 from .engine import settle
-from .models import CANT, DealIn, LEFT, VERIFIED, Terms
+from .models import CANT, DealIn, Fact, LEFT, VERIFIED, Terms
 from .scoring import gates
 from . import niche as niches
 from . import service
@@ -85,6 +85,24 @@ def _conflict(deal, company, creator):
     return None
 
 
+def _company_facts(company: dict) -> list[dict]:
+    """Pulls the company's current picture for this deal, cited and dated. A failure here is noted, not hidden."""
+    if not company.get('company_id'):
+        return []
+    try:
+        data, ts = service.cd.enrich_company(company['company_id'])
+    except Unavailable as e:
+        return [Fact(subject=company['name'], field='company_data', value='unavailable', source=f'Crustdata Company Enrich: {e}', strength=CANT).model_dump()]
+    data = data or {}
+    out = []
+    head, fund = (data.get('headcount') or {}).get('total'), data.get('funding') or {}
+    if head:
+        out.append(Fact(subject=company['name'], field='headcount', value=head, source='Crustdata Company Enrich', as_of=ts).model_dump())
+    if fund.get('last_fundraise_date'):
+        out.append(Fact(subject=company['name'], field='last_funding', value=str(fund['last_fundraise_date'])[:10], source='Crustdata Company Enrich', as_of=ts).model_dump())
+    return out
+
+
 def step_verify(deal):
     company, creators = _people(deal)
     deal['reasons'] = list(company.get('reasons') or [])
@@ -97,6 +115,7 @@ def step_verify(deal):
         clash = _conflict(deal, company, c)
         if clash:
             raise Stop('blocked', clash)
+    deal['facts'] = _company_facts(company)
     deal['tier'] = company.get('tier') or 'C'
     deal['tier_terms'] = TIERS.get(deal['tier'], TIERS['C'])
     if company.get('sender_status') == LEFT:
@@ -143,6 +162,7 @@ def step_negotiate(deal):
     opts = packages.options(creators, _limits(deal, company, creators, base), base, deal['tier'])
     # Requested terms come first. Only if nothing at that level fits does the engine try lighter versions.
     full = [o for o in opts if o.terms['stories'] >= base.stories and o.terms['usage_days'] >= base.usage_days and o.terms['exclusivity_days'] >= base.exclusivity_days]
+    db.event(deal['id'], 'terms_compared', {'count': len(opts)})
     result = settle(full, FEE_CREATOR, FEE_BRAND) if full else None
     if result is None and opts:
         result = settle(opts, FEE_CREATOR, FEE_BRAND)
@@ -172,7 +192,14 @@ def step_recheck(deal):
         changed = f"{company.get('sender_name') or 'The company contact'} left {company['name']} during this deal (simulated)."
     elif deal.get('simulate_outage'):
         changed = 'The verification source timed out, so nothing could be re-checked (simulated). Facts stay unconfirmed instead of being assumed.'
-    elif company.get('sender_status') == VERIFIED:
+    elif company.get('company_id') and company.get('domain'):
+        try:
+            if not service.cd.identify_domain(company['domain'], fresh=True)[0]:
+                changed = f"{company['domain']} no longer resolves to a company."
+            service.cd.enrich_company(company['company_id'], fresh=True)
+        except Unavailable as e:
+            changed = f'The company could not be re-checked before signing ({e}), so this is unconfirmed.'
+    if not changed and company.get('sender_status') == VERIFIED:
         r = verify_sender(service.cd, company.get('sender_name'), company.get('sender_email'), company.get('company_id'), company.get('domain'), company.get('sender_profile_url'), fresh=True)
         if r['status'] == CANT:
             changed = 'The sender could not be re-checked before signing, so this is unconfirmed: ' + ' '.join(r['reasons'])
@@ -202,6 +229,8 @@ def step_sign(deal):
             key = f"exclusive:{c['id']}:{company.get('group') or company.get('niche') or company['id']}"
             if not db.act(key, deal['id'], 'exclusivity_reserved', {'creator': c['id'], 'days': excl}) and db.ledger_owner(key) != deal['id']:
                 raise Stop('blocked', f"@{c['handle']} was reserved by another company that signed first.")
+    if deal.get('human_sign') and not deal.get('signature'):
+        raise Pause('signature')
     for party in [company['id']] + deal['creator_ids']:
         db.act(f"{deal['id']}:sign:{party}", deal['id'], 'mock_signature', {'party': party, 'contract_sha256': deal['contract_hash'], 'is_mock': True})
 
@@ -258,9 +287,11 @@ def run(deal_id: str, crash_after: str | None = None) -> dict:
         return db.get('deal', deal_id)
     try:
         deal = db.get('deal', deal_id)
+        service.cd.set_trace(lambda source, how, seconds, credits: db.event(deal_id, 'data_call', {'source': source, 'how': how, 'seconds': seconds, 'credits': credits}))
         while deal['state'] not in FINAL:
             state = deal['state']
             deal['paused'] = None
+            db.event(deal_id, 'step_started', {'step': state})
             try:
                 STEPS[state](deal)
             except Pause as p:
@@ -288,6 +319,7 @@ def run(deal_id: str, crash_after: str | None = None) -> dict:
                 time.sleep(min(deal['pace_ms'], 3000) / 1000)
         return deal
     finally:
+        service.cd.set_trace(None)
         lock.release()
 
 

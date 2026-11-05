@@ -458,6 +458,144 @@ def test_scoring_continues_until_enough_real_matches(world, monkeypatch):
     assert service.matches(c['id'])['assessing'] == 15 and started == [15]
 
 
+def _apps():
+    from app import applications, settings
+    return applications, settings
+
+
+def test_applications_flow_to_a_chosen_deal_and_decline_the_rest(world):
+    applications, settings = _apps()
+    a, b = creator(handle='one', floor=2000), creator(handle='two', floor=1500)
+    co = company(ceiling=30000, limits=CompanyLimits(ceiling=30000, value_per_reel=9000))
+    x = applications.create(a['id'], co['id'], Terms(), 'Standard')
+    y = applications.create(b['id'], co['id'], Terms(), 'Standard')
+    assert applications.create(a['id'], co['id'], Terms())['id'] == x['id']        # Applying twice never sends twice.
+    ranked = applications.for_company(co['id'])['open']
+    assert len(ranked) == 2 and ranked[0]['why'] and ranked[0]['rank'] == 1
+    assert '2000' not in json.dumps(ranked) and 'floor' not in json.dumps(ranked)   # Floors stay private.
+    d = applications.accept(x['id'])
+    assert applications.accept(x['id'])['id'] == d['id']                            # Accepting twice gives one deal.
+    assert db.get('application', y['id'])['status'] == 'declined'
+    end = orch.run(d['id'])
+    assert end['state'] == 'sign' and end['paused']['kind'] == 'signature' and 'mock_signature' not in kinds(d['id'])
+    end = orch.set_field(d['id'], 'signature', {'by': 'company'})
+    assert end['state'] == 'done' and kinds(d['id']).count('mock_payout') == 1
+
+
+def test_applications_made_to_a_known_brand_appear_when_it_registers(world):
+    applications, _ = _apps()
+    c = creator()
+    known = service.search_brands('realbrand.in')[0]
+    a = applications.create(c['id'], known['company_id'], Terms())
+    registered = company(name='Real Brand')
+    assert registered['id'] == known['company_id'] and [x['id'] for x in applications.for_company(registered['id'])['open']] == [a['id']]
+    assert registered['source'] == 'registered'
+
+
+def test_blocked_company_cannot_receive_applications(world):
+    applications, _ = _apps()
+    fake = company(name='boAt', domain='boat-collabs.co', sender_name=None, sender_email=None)
+    with pytest.raises(ValueError):
+        applications.create(creator()['id'], fake['id'], Terms())
+
+
+def test_auto_deal_respects_thresholds_and_explains_skips(world):
+    applications, settings = _apps()
+    c = creator()
+    db.put('seed', 'food', {'at': 'now'})
+    good = {'text': 'food', 'influencer_roles': 3, 'influencer_staff': 3, 'months_since_funding': 5, 'headcount_growth': 0.3, 'recent_news': 5}
+    db.put('company', 'co_good', {'id': 'co_good', 'name': 'Food Good', 'niche': 'food', 'status': 'verified', 'tier': 'B', 'source': 'company_search', 'signals': good})
+    db.put('company', 'co_thin', {'id': 'co_thin', 'name': 'Food Thin', 'niche': 'food', 'status': 'verified', 'tier': 'B', 'source': 'company_search', 'signals': {'text': 'food'}})
+    db.put('company', 'co_weak', {'id': 'co_weak', 'name': 'Food Weak', 'niche': 'food', 'status': 'weak_match', 'tier': 'B', 'source': 'company_search', 'signals': good})
+    assert applications.auto_apply(c['id'])['sent'] == []                           # Off by default.
+    settings.update('creator', c['id'], {'auto_deal': True})
+    r = applications.auto_apply(c['id'])
+    assert r['sent'] == ['Food Good']
+    held = {h['name']: h['reason'] for h in r['held_back']}
+    assert 'Confidence' in held['Food Thin'] and 'not verified' in held['Food Weak']
+    assert applications.auto_apply(c['id'])['sent'] == []                           # Running again sends nothing twice.
+    assert applications.for_creator(c['id'])[0]['source'] == 'auto'
+
+
+def test_auto_deal_cap_is_honoured(world):
+    applications, settings = _apps()
+    c = creator()
+    db.put('seed', 'food', {'at': 'now'})
+    good = {'text': 'food', 'influencer_roles': 3, 'influencer_staff': 3, 'months_since_funding': 5, 'headcount_growth': 0.3, 'recent_news': 5}
+    for i in range(4):
+        db.put('company', f'co_{i}', {'id': f'co_{i}', 'name': f'Food {i}', 'niche': 'food', 'status': 'verified', 'tier': 'B', 'source': 'company_search', 'signals': good})
+    settings.update('creator', c['id'], {'auto_deal': True, 'auto_max_per_run': 2})
+    assert len(applications.auto_apply(c['id'])['sent']) == 2
+
+
+def test_settings_reject_unknown_keys_and_wrong_types(world):
+    _, settings = _apps()
+    with pytest.raises(ValueError):
+        settings.update('creator', 'x', {'nope': True})
+    with pytest.raises(ValueError):
+        settings.update('creator', 'x', {'auto_deal': 'yes'})
+    with pytest.raises(ValueError):
+        settings.update('creator', 'x', {'auto_min_likelihood': 99999})
+    assert settings.update('creator', 'x', {'auto_min_likelihood': 70})['auto_min_likelihood'] == 70
+
+
+def test_auto_accept_uses_the_brands_threshold(world):
+    applications, settings = _apps()
+    co = company(ceiling=30000, limits=CompanyLimits(ceiling=30000, value_per_reel=9000))
+    settings.update('company', co['id'], {'auto_accept': True, 'auto_accept_min_fit': 1, 'sign_myself': False})
+    a = applications.create(creator()['id'], co['id'], Terms())
+    assert a['status'] == 'accepted' and db.get('deal', a['deal_id'])['state'] == 'done'
+
+
+def test_deal_activity_records_real_lookups(world):
+    d, end = go([creator()['id']], company())
+    calls = [e['data'] for e in db.events(d['id']) if e['type'] == 'data_call']
+    assert {'Company Enrich', 'Company Identify'} <= {c['source'] for c in calls} and any(c['how'] == 'live' for c in calls)
+
+
+def test_recheck_failure_on_company_lookup_pauses(world):
+    d = orch.start(DealIn(creator_ids=[creator()['id']], company_id=company(sender_name=None, sender_email=None)['id']))
+    with pytest.raises(orch.SimulatedCrash):
+        orch.run(d['id'], crash_after='contract')
+    world.fail_paths['/company/identify'] = lambda r: httpx.Response(500)
+    end = orch.run(d['id'])
+    assert end['paused']['kind'] == 'recheck_override'
+
+
+def test_why_lines_cite_only_real_evidence(world):
+    co, c = company(), creator()
+    r = service.company_creators(co['id'])['creators'][0]
+    assert '@small_food' in r['why']
+    assert 'hiring' not in scoring.why_brand('X', {'factors': {'niche': 1, 'influencer_roles': None}}, 'verified')
+    assert 'hiring' in scoring.why_brand('X', {'factors': {'niche': 1, 'influencer_roles': 0.9}}, 'verified')
+
+
+def test_one_handle_stays_one_record(world):
+    a, b = creator(handle='Same'), creator(handle='@same')
+    assert a['id'] == b['id'] and a['ownership_code'] == b['ownership_code']
+
+
+def test_read_reports_progress(world):
+    from app.creators import read_stats
+    seen = []
+    read_stats(service.cd, 'tastyfood', progress=seen.append)
+    assert seen[0] == 'Reading the public profile' and any('reel' in s for s in seen)
+
+
+def test_learned_words_alone_are_described_as_related_not_a_fit(world):
+    s = scoring.likelihood({'text': 'x', 'influencer_roles': 3, 'influencer_staff': 3, 'months_since_funding': 5, 'headcount_growth': 0.3, 'recent_news': 5}, 'food')
+    assert s['eligible'] is False
+    assert 'works in your niche' in scoring.why_brand('A', {'factors': {'niche': 1.0}}, 'verified')
+    assert 'looks related' in scoring.why_brand('A', {'factors': {'niche': 0.5}}, 'verified')
+
+
+def test_a_stray_learned_word_does_not_make_a_brand_eligible(world):
+    from app import niche
+    niche.profile('home cooking')
+    one_word = scoring.likelihood({'text': 'recipe', 'influencer_roles': 3, 'influencer_staff': 3, 'months_since_funding': 5, 'headcount_growth': 0.3, 'recent_news': 5}, 'home cooking')
+    assert one_word['eligible'] is False
+
+
 def test_minor_is_gated(world):
     d, end = go([creator(is_minor=True)['id']], company())
     assert end['state'] == 'blocked' and 'under 18' in end['final_reason']

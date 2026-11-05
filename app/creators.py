@@ -49,19 +49,22 @@ def read_profile(cd: Crustdata, handle: str, fresh=False) -> dict | None:
 ANOMALOUS_ENGAGEMENT = 0.5   # Above 50% of followers, the sampled posts are probably not typical.
 
 
-def read_stats(cd: Crustdata, handle: str, max_reels=8) -> dict:
+def read_stats(cd: Crustdata, handle: str, max_reels=8, progress=None) -> dict:
     """About 1 + max_reels credits. Only reels that really belong to this handle count.
     A profile's first posts are often pinned virals, so they are skipped when enough other posts exist."""
     handle = handle.strip().lstrip('@')
+    note = progress or (lambda t: None)
+    note('Reading the public profile')
     p = read_profile(cd, handle)
     if not p:
         raise Unavailable('profile fields could not be read')
     reels = []
     own = p['own_post_ids'] or p['post_ids']
     ids = own[3:] + own[:3] if len(own) >= 6 else own      # Likely-pinned posts are only read last.
-    for pid in ids[:max_reels]:
+    for i, pid in enumerate(ids[:max_reels], 1):
         if len(reels) >= max_reels:
             break
+        note(f'Reading recent reel {i} of {min(len(ids), max_reels)}')
         try:
             _, body, _ = cd.fetch_page(f'https://www.instagram.com/reel/{pid}/')
         except Unavailable:

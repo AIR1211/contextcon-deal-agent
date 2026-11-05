@@ -44,3 +44,7 @@ D13 Broad niches: "vlogging" search returns media peers, not buyers, so those ar
 creator sees brands hiring for creator marketing across niches, labelled "fit not proven".
 D14 Brand discovery query. Compared 4 phrasings live on 3 niches. "consumer brand selling X products" found real consumer
 brands; "X brand" matched names containing the word brand. A niche match now needs the company's own text.
+D15 Showing the work. Deal steps make real Crustdata lookups and list each one (source, live or cached, time). An optional
+pace setting slows steps for viewers, and the deal page says so while it is on. GSAP motion follows real events only.
+D16 Auto Deal thresholds: likelihood >= 55, confidence >= 40, verified or partly verified, at most 10. Stricter than the 45
+needed just to be shown, because it acts without asking. It only applies; the brand still chooses and signs.

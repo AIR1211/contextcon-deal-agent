@@ -21,6 +21,9 @@ class Unavailable(Exception):
     """The source could not answer. Never treat this as a negative finding."""
 
 
+SOURCE_NAMES = {'/company/identify': 'Company Identify', '/company/enrich': 'Company Enrich', '/company/search': 'Company Search', '/person/search': 'Person Search', '/person/enrich': 'Person Enrich', '/job/search': 'Job Search', '/web/search/live': 'Web Search', '/web/enrich/live': 'Web Fetch'}
+
+
 class NotCached(Unavailable):
     """Raised in cache-only mode when a lookup hasn't been made yet."""
 
@@ -82,6 +85,7 @@ class Crustdata:
         """Returns (data, as_of). fresh=True skips the cache, for checks right before signing."""
         key = hashlib.sha256((path + json.dumps(body, sort_keys=True)).encode()).hexdigest()
         hit = db.cache_get(key)
+        started = time.time()
         if getattr(self._local, 'cache_only', False):
             if hit:
                 return hit
@@ -89,6 +93,7 @@ class Crustdata:
         if hit and not fresh:
             age = datetime.now(timezone.utc) - datetime.fromisoformat(hit[1])
             if age < timedelta(hours=ttl_hours):
+                self._trace(path, 'cache', 0, 0)
                 return hit
         try:
             data, cr = self._request('POST', path, body)
@@ -98,7 +103,17 @@ class Crustdata:
             raise
         ts = now()
         db.cache_put(key, data, ts, cr)
+        self._trace(path, 'live', time.time() - started, cr)
         return data, ts
+
+    def set_trace(self, fn) -> None:
+        """Reports each lookup to the caller on this thread, so the UI can show real work."""
+        self._local.trace = fn
+
+    def _trace(self, path, how, seconds, credits) -> None:
+        fn = getattr(self._local, 'trace', None)
+        if fn:
+            fn(SOURCE_NAMES.get(path, path), how, round(seconds, 1), credits)
 
     @contextmanager
     def cache_only(self):
@@ -109,8 +124,8 @@ class Crustdata:
         finally:
             self._local.cache_only = False
 
-    def identify_domain(self, domain: str):
-        d, ts = self.post('/company/identify', {'domains': [domain]})
+    def identify_domain(self, domain: str, fresh=False):
+        d, ts = self.post('/company/identify', {'domains': [domain]}, fresh=fresh)
         return _matches(d), ts
 
     def identify_name(self, name: str):

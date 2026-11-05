@@ -21,6 +21,7 @@ def conn() -> sqlite3.Connection:
     if c is None or getattr(_local, 'path', None) != config.DB_PATH:
         c = sqlite3.connect(config.DB_PATH, timeout=30, isolation_level=None)
         c.execute('PRAGMA journal_mode=WAL')
+        c.execute('PRAGMA synchronous=NORMAL')      # Safe across a process crash, and much faster per event.
         c.executescript(SCHEMA)
         _local.c, _local.path = c, config.DB_PATH
     return c

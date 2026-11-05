@@ -3,7 +3,9 @@ for that phrase (pseudo-relevance feedback). If Crustdata is down, matching fall
 import re
 from collections import Counter
 
-from . import db
+from functools import lru_cache
+
+from . import config, db
 from .crustdata import Unavailable
 
 # Grammar and generic business words only. No domain knowledge lives here.
@@ -25,8 +27,13 @@ def stem(w: str) -> str:
     return w
 
 
+@lru_cache(maxsize=50000)
+def _tokens(text: str) -> tuple:
+    return tuple(stem(w) for w in re.findall(r"[a-z][a-z0-9]{2,}", text.lower()) if w not in STOP and stem(w) not in STOP)
+
+
 def tokens(text: str) -> list[str]:
-    return [stem(w) for w in re.findall(r"[a-z][a-z0-9]{2,}", (text or '').lower()) if w not in STOP and stem(w) not in STOP]
+    return list(_tokens(text or ''))
 
 
 def norm(niche: str) -> str:
@@ -43,8 +50,12 @@ def profile(niche: str) -> dict:
     key = norm(niche)
     if not key:
         return {'own': [], 'learned': [], 'source': 'empty'}
+    memo = _memo.get((config.DB_PATH, key))
+    if memo:
+        return memo
     doc = db.get('niche', key)
     if doc:
+        _memo[(config.DB_PATH, key)] = doc
         return doc
     own = sorted(set(tokens(niche)))
     learned, source = [], 'words only'
@@ -59,7 +70,8 @@ def profile(niche: str) -> dict:
         source = 'Crustdata Company Search' if rows else source
     except Unavailable:
         return {'own': own, 'learned': [], 'source': 'words only, search unavailable'}    # Not saved, so it retries.
-    return db.put('niche', key, {'niche': niche, 'own': own, 'learned': learned, 'source': source})
+    _memo[(config.DB_PATH, key)] = db.put('niche', key, {'niche': niche, 'own': own, 'learned': learned, 'source': source})
+    return _memo[(config.DB_PATH, key)]
 
 
 def hits(niche: str, text: str) -> float:

@@ -14,3 +14,5 @@ Append what we tried, whether it worked, and why.
 - Made the LLM lean: rules first, model only for missing fields, cached, no loops.
 - Live test on a real small creator: half the links on a profile are other people's posts tagging them. Now reads only the creator's own posts (reels read went from 1 to 5).
 - Mistake: requested a Company Search field that does not exist. Tests missed it because the fake API accepted any field; the fake now rejects unknown fields. The pre-load exposed it by failing on all 40 niches.
+- Added creator applications, a brand offers inbox, Auto Deal, settings and "why" lines. Applications survive a brand registering later, because registration merges into the known company record.
+- Doubted a match ("Zolo") as a false positive; checking showed it was a real fashion brand. Tightened evidence wording anyway: learned words alone now say "looks related".

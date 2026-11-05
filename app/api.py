@@ -1,6 +1,7 @@
 """HTTP API for both dashboards. Run: uvicorn app.api:app --reload  Interactive docs are at /docs. No login in this build."""
 import asyncio
 import json
+import time
 from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
@@ -8,7 +9,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import config, db, llm, offers, orchestrator as orch, service
+from . import applications, config, db, llm, offers, orchestrator as orch, service, settings
 from .crustdata import Unavailable
 from .models import CompanyIn, CompanyLimits, CompanyResponse, CreatorIn, DealIn, Decision, Terms
 
@@ -45,8 +46,10 @@ def home():
 
 
 @app.post('/api/creators')
-def create_creator(data: CreatorIn):
-    c = service.onboard_creator(data)
+def create_creator(data: CreatorIn, background: BackgroundTasks):
+    """Answers at once. The read continues in the background; poll the creator for its progress."""
+    c = service.begin_creator(data)
+    background.add_task(service.finish_creator, c['id'], data)
     return {**service.public_creator(c), 'ownership_code': c['ownership_code'], 'limits': c['limits']}
 
 
@@ -70,6 +73,82 @@ def check_ownership(cid: str):
 def creator_matches(cid: str):
     need('creator', cid)
     return service.matches(cid)
+
+
+@app.get('/api/brands/search')
+def brand_search(q: str):
+    return service.search_brands(q)
+
+
+class ApplyIn(BaseModel):
+    creator_id: str
+    company_id: str
+    terms: Terms
+    pack: str = 'Standard'
+
+
+@app.post('/api/applications')
+def apply_to_brand(x: ApplyIn):
+    need('creator', x.creator_id), need('company', x.company_id)
+    try:
+        return applications.create(x.creator_id, x.company_id, x.terms, x.pack)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+
+@app.get('/api/creators/{cid}/applications')
+def creator_applications(cid: str):
+    return applications.for_creator(cid)
+
+
+@app.get('/api/companies/{cid}/applications')
+def company_applications(cid: str):
+    need('company', cid)
+    return applications.for_company(cid)
+
+
+@app.post('/api/applications/{aid}/accept')
+def accept_application(aid: str, background: BackgroundTasks):
+    need('application', aid)
+    try:
+        d = applications.accept(aid)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    background.add_task(safe_run, d['id'])
+    return orch.public_deal(d)
+
+
+@app.post('/api/applications/{aid}/decline')
+def decline_application(aid: str):
+    need('application', aid)
+    return applications.decline(aid)
+
+
+def _auto_loop(cid: str) -> None:
+    """Keeps applying as background scoring finishes. Stops when the toggle goes off."""
+    for _ in range(30):
+        r = applications.auto_apply(cid)
+        if not r['assessing'] or not settings.get('creator', cid)['auto_deal']:
+            return
+        time.sleep(6)
+
+
+@app.get('/api/settings/{scope}/{sid}')
+def read_settings(scope: str, sid: str):
+    if scope not in settings.DEFAULTS:
+        raise HTTPException(404, 'Unknown settings scope')
+    return settings.get(scope, sid)
+
+
+@app.post('/api/settings/{scope}/{sid}')
+def write_settings(scope: str, sid: str, changes: dict, background: BackgroundTasks):
+    try:
+        out = settings.update(scope, sid, changes)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    if scope == 'creator' and out['auto_deal'] and db.get('creator', sid):
+        background.add_task(_auto_loop, sid)
+    return out
 
 
 @app.get('/api/creators/{cid}/packs/{company_id}')
@@ -197,6 +276,12 @@ def company_response(did: str, r: CompanyResponse):
 def decide(did: str, x: Decision):
     need('deal', did)
     return orch.public_deal(orch.decide(did, x.approve, x.note, x.new_floor_reel))
+
+
+@app.post('/api/deals/{did}/sign')
+def sign(did: str):
+    need('deal', did)
+    return orch.public_deal(orch.set_field(did, 'signature', {'by': 'company', 'is_mock': True}))
 
 
 @app.post('/api/deals/{did}/deliver')

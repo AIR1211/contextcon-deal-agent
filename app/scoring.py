@@ -61,14 +61,15 @@ def likelihood(sig: dict, niche: str, use_jobs: bool = True, open_niche: bool = 
     }
     score, conf = _combine(BRAND_WEIGHTS, f)
     reasons = []
-    if hits: reasons.append(f'Business matches the {niche} niche.')
+    if hits >= 2: reasons.append(f'Its own description mentions {niche}.')
+    elif hits >= 1: reasons.append(f'Its description uses words common in {niche}.')
     if roles: reasons.append(f'{roles} open influencer marketing role(s).')
     if staff: reasons.append(f'{staff} staff with influencer marketing in their profile.')
     if m is not None and m < 24: reasons.append(f'Raised funding {int(m)} months ago.')
     if g is not None and g > 0.05: reasons.append(f'Headcount grew {round(g * 100)}% in about a year.')
-    if not hits and open_niche: reasons.append(f'Hires for creator marketing across niches, so fit with {niche} is not proven.')
-    elif not hits: reasons.append(f'No evidence this business fits {niche}.')
-    return {'score': score, 'confidence': conf, 'reasons': reasons, 'factors': {k: v[0] for k, v in f.items()}, 'eligible': (bool(hits) or open_niche) and score >= config.ASSUMPTIONS['match_threshold']}
+    if hits < 1 and open_niche: reasons.append(f'Hires for creator marketing across niches, so fit with {niche} is not proven.')
+    elif hits < 1: reasons.append(f'No clear evidence this business fits {niche}.')
+    return {'score': score, 'confidence': conf, 'reasons': reasons, 'factors': {k: v[0] for k, v in f.items()}, 'eligible': (hits >= 1 or open_niche) and score >= config.ASSUMPTIONS['match_threshold']}
 
 
 def gates(creator: dict, company: dict) -> list[str]:
@@ -112,4 +113,38 @@ def fit(creator: dict, company: dict) -> dict:
     if s.get('engagement_anomalous'): reasons.append('Sampled posts look unusually viral for this account, so engagement is not used. Ask for analytics.')
     if not s.get('reels_read') and s.get('followers') is not None: reasons.append('No readable public posts, so engagement is unknown, not low.')
     if conf < 50: reasons.append('Low confidence: ask for analytics before relying on this score.')
-    return {'score': score, 'confidence': conf, 'gates_failed': failed, 'passes': not failed, 'reasons': reasons, 'source': s.get('source')}
+    return {'score': score, 'confidence': conf, 'gates_failed': failed, 'passes': not failed, 'reasons': reasons, 'source': s.get('source'), 'factors': {k: v[0] for k, v in f.items()}}
+
+
+def _sentence(subject: str, good: list[str], caution: str | None, empty: str) -> str:
+    if not good:
+        return empty + (f' {caution}' if caution else '')
+    joined = good[0] if len(good) == 1 else ', '.join(good[:-1]) + ' and ' + good[-1]
+    return f'{subject} {joined}.' + (f' {caution}' if caution else '')
+
+
+def why_brand(name: str, s: dict | None, status: str) -> str:
+    """One line for a creator: why this brand, built only from evidence we hold."""
+    x = (s or {}).get('factors') or {}
+    good = []
+    if (x.get('niche') or 0) >= 1: good.append('works in your niche')
+    elif (x.get('niche') or 0) >= 0.5: good.append('looks related to your niche')
+    if (x.get('influencer_roles') or 0) >= 0.6: good.append('is hiring for influencer marketing')
+    if (x.get('influencer_staff') or 0) >= 0.5: good.append('has staff running creator campaigns')
+    if (x.get('funding') or 0) >= 0.7: good.append('raised funding recently')
+    if (x.get('growth') or 0) >= 0.6: good.append('is growing')
+    caution = {'weak_match': 'Its identity is only partly confirmed, so money is held upfront.', 'partly_verified': 'It is a small or newly checked brand, so money is held upfront.'}.get(status)
+    return _sentence(name, good[:3], caution, f'Little public evidence about {name} so far.')
+
+
+def why_creator(creator: dict, f: dict, company: dict) -> str:
+    """One line for a brand: why this creator, built only from evidence we hold."""
+    x = f.get('factors') or {}
+    s = creator.get('stats') or {}
+    good = []
+    if (x.get('content') or 0) >= 0.4: good.append(f"posts about {company.get('niche') or creator.get('niche')}")
+    if (x.get('attention') or 0) >= 0.4: good.append(f"has an engaged audience ({round(s.get('engagement_rate', 0) * 100 + 1e-9, 1)}%)")
+    if (x.get('audience') or 0) >= 0.7: good.append('reaches your market, self-reported')
+    if s.get('followers') and s['followers'] < 50000: good.append('is small enough to be affordable')
+    caution = 'Based on public data only, so ask for analytics.' if f.get('confidence', 0) < 50 else None
+    return _sentence('@' + creator['handle'], good[:3], caution, f"Little public evidence about @{creator['handle']} so far.")
