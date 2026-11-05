@@ -5,7 +5,7 @@ import secrets
 from . import db, packages, scoring, tiebreak
 from .config import FEE_BRAND, FEE_CREATOR
 from .engine import settle
-from .creators import NICHE_WORDS, read_profile, read_stats, add_engagement
+from .creators import niche_hits, read_profile, read_stats, add_engagement
 from .crustdata import Crustdata, Unavailable
 from .models import CANT, CompanyIn, CreatorIn, Fact, Terms
 from .verify import group_of, risk_tier, verify_brand, verify_sender
@@ -140,8 +140,7 @@ def matches(creator_id: str, deep_limit: int = 15) -> dict:
     creator = db.get('creator', creator_id)
     niche = creator['niche']
     brands = [b for b in db.all_docs('company') if b['status'] != 'blocked' and not is_intermediary(b.get('name'))]
-    words = NICHE_WORDS.get(niche, [])
-    candidates = [b for b in brands if b.get('niche') == niche or any(w in ' '.join(str(b.get(k) or '') for k in ('name', 'description')).lower() for w in words)]
+    candidates = [b for b in brands if b.get('niche') == niche or niche_hits(niche, ' '.join(str(b.get(k) or '') for k in ('name', 'description')))]
     ranked, rejected = [], []
     for b in candidates[:deep_limit]:
         s = _brand_score(b, niche, True)

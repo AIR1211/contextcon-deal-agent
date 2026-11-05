@@ -5,7 +5,7 @@ import json
 import re
 
 from . import config, db
-from .creators import NICHE_WORDS
+from .creators import NICHE_WORDS, niche_hits
 from .models import now
 
 REQUIRED = ("brand", "budget", "niche", "email")
@@ -61,8 +61,8 @@ def parse_brief_rules(text: str) -> dict:
         return (int(m[1]) if m[1].isdigit() else words[m[1]]) if m else None
     days = re.search(r'(\d+)\s*[- ]?\s*(day|month)s?\s*(?:of\s+)?(?:usage|rights|licen[cs]e)', t) or re.search(r'(?:usage|rights|licen[cs]e)\D{0,15}(\d+)\s*[- ]?\s*(day|month)', t)
     usage = (int(days[1]) * (30 if days[2] == 'month' else 1)) if days else None
-    niche = max(NICHE_WORDS, key=lambda n: sum(w in t for w in NICHE_WORDS[n]))
-    niche = niche if any(w in t for w in NICHE_WORDS[niche]) else None
+    niche = max(NICHE_WORDS, key=lambda n: niche_hits(n, t))
+    niche = niche if niche_hits(niche, t) else None
     sign = re.search(r'(?i:regards|thanks|i am|i\'m|this is)[,:\s-]+([A-Z][a-z]+(?:\s[A-Z][a-z]+)?)', text)
     brand = re.search(r'(?i:from|at|with|brand:?)\s+([A-Z][\w&-]+(?:\s[A-Z][\w&-]+)?)', text)
     return {'brand': brand[1] if brand else None, 'budget': _money(text), 'niche': niche, 'reels': count(r'reels?'), 'stories': count(r'stor(?:y|ies)'), 'usage_days': usage, 'email': email[0] if email else None, 'sender_name': sign[1] if sign else None}

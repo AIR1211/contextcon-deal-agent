@@ -3,7 +3,7 @@ Weights are the team's judgement, not measurements. Unknown factors score 0.5 an
 from datetime import date
 
 from . import config
-from .creators import NICHE_WORDS, niche_share
+from .creators import niche_hits, niche_share
 
 BRAND_WEIGHTS = {'niche': 25, 'influencer_roles': 25, 'influencer_staff': 15, 'funding': 15, 'growth': 10, 'news': 10}
 FIT_WEIGHTS = {'audience': 35, 'content': 25, 'attention': 20, 'past_sponsored': 10, 'reliability': 10}
@@ -46,8 +46,7 @@ def brand_signals(company: dict | None, roles: int | None, staff: int | None, ni
 
 def likelihood(sig: dict, niche: str, use_jobs: bool = True) -> dict:
     """How likely a brand is to buy creator marketing in this niche. use_jobs=False is for the backtest."""
-    words = NICHE_WORDS.get(niche, [])
-    hits = sum(w in sig.get('text', '') for w in words)
+    hits = niche_hits(niche, sig.get('text', ''))
     m = sig.get('months_since_funding')
     g = sig.get('headcount_growth')
     roles, staff, news = sig.get('influencer_roles'), sig.get('influencer_staff'), sig.get('recent_news')

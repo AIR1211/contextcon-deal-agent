@@ -8,7 +8,7 @@ from .crustdata import Crustdata, Unavailable
 NICHE_WORDS = {
     'food': ['food', 'recipe', 'cook', 'kitchen', 'snack', 'eat', 'chef', 'street food', 'beverage', 'dairy', 'nutrition'],
     'beauty': ['skin', 'beauty', 'makeup', 'cosmetic', 'hair', 'glow', 'serum', 'personal care'],
-    'fashion': ['fashion', 'outfit', 'style', 'apparel', 'clothing', 'wear', 'textile'],
+    'fashion': ['fashion', 'outfit', 'style', 'apparel', 'clothing', 'wear', 'streetwear', 'textile'],
     'tech': ['tech', 'gadget', 'review', 'phone', 'audio', 'wearable', 'electronics', 'software'],
     'fitness': ['fitness', 'gym', 'workout', 'yoga', 'health', 'protein', 'wellness'],
     'finance': ['finance', 'invest', 'money', 'stock', 'mutual fund', 'banking', 'insurance'],
@@ -16,11 +16,17 @@ NICHE_WORDS = {
 }
 
 
+def niche_hits(niche: str, text: str) -> int:
+    """Words must start at a word boundary, so "eat" does not match "creator" or "great"."""
+    t = (text or '').lower()
+    return sum(bool(re.search(r'\b' + re.escape(w), t)) for w in NICHE_WORDS.get(niche, []))
+
+
 def niche_share(texts: list[str], niche: str) -> float | None:
     texts = [t for t in texts if t]
     if not texts or niche not in NICHE_WORDS:
         return None
-    return sum(any(w in t.lower() for w in NICHE_WORDS[niche]) for t in texts) / len(texts)
+    return sum(niche_hits(niche, t) > 0 for t in texts) / len(texts)
 
 
 def _og(body: str) -> str:

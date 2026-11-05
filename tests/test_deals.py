@@ -271,7 +271,7 @@ def test_llm_is_asked_only_for_missing_fields(world, monkeypatch):
         seen['fields'] = schema['required']
         return '{"niche": "food"}' if 'niche' in schema['required'] else None
     monkeypatch.setattr(llm, '_claude', fake)
-    b = llm.parse_brief('From Snackly: budget 30k. neha@snackly.in. Our chips launch needs a creator.')
+    b = llm.parse_brief('From Brandly: budget 30k. neha@brandly.in. Our chips launch needs a creator.')
     assert seen['fields'] == ['niche'] and b['niche'] == 'food' and b['parsed_by'] == 'rules+llm'
 
 
@@ -287,6 +287,12 @@ def test_pitch_rewrite_that_changes_numbers_is_rejected(world, monkeypatch):
     monkeypatch.setattr(llm, '_claude', lambda *a, **k: 'Wonderful offer: 99 reels!')
     text = llm.pitch_text({'name': 'X', 'niche': 'food'}, [{'handle': 'a'}], {'reels': 1, 'stories': 0, 'usage_days': 30})
     assert '99' not in text and 'AI agent' in text
+
+
+def test_niche_words_match_whole_word_starts_only():
+    from app.creators import niche_hits
+    assert niche_hits('food', 'a great creator') == 0
+    assert niche_hits('food', 'eating snacks') >= 2
 
 
 def test_minor_is_gated(world):
