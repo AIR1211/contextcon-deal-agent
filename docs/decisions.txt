@@ -29,3 +29,10 @@ D8 Who decides, the LLM or code?
 Chosen: code. The same input must give the same answer. The LLM reads messy text and drafts messages, with a fallback.
 
 D9 Stack: FastAPI and SQLite in one process. Fast to build and easy to run. A real launch would need a proper queue.
+
+D10 Tiebreaks: published chains, not manual choice or hidden scores.
+Creator choosing a company: pay (within 2% is a tie) -> safer payment -> fewer restrictions -> fit -> earliest -> fair lot.
+Company choosing a creator: fit -> evidence -> price -> engagement -> fewer deals so far -> smaller creator -> fair lot.
+Merit comes first; then the choice spreads income to smaller creators, which is the product's purpose. Fair lot is a
+hash, not database order, so nobody wins an exact tie by signing up first.
+Equal-surplus options: fewer restrictions on the creator. Race for exclusivity: first to sign, reserved atomically.

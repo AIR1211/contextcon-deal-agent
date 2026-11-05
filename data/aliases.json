@@ -1,0 +1,9 @@
+[
+  {"group": "boat", "domain": "boat-lifestyle.com", "names": ["boat", "boat lifestyle", "imagine marketing", "imagine marketing limited", "imagine marketing india"], "source": "boAt investor relations page, Imagine Marketing Ltd; found via Crustdata Web Search"},
+  {"group": "mamaearth", "domain": "mamaearth.in", "names": ["mamaearth", "honasa", "honasa consumer", "honasa consumer ltd"], "source": "Web search, tested in eval run 1"},
+  {"group": "nykaa", "domain": "nykaa.com", "names": ["nykaa", "fsn e-commerce", "fsn e-commerce ventures"], "source": "Web search, tested in eval run 1"},
+  {"group": "yogabar", "domain": "yogabars.in", "names": ["yoga bar", "yogabar", "sprout life foods"], "source": "Crustdata company name: Yoga Bar (Sprout Life Foods)"},
+  {"group": "nike", "domain": "nike.com", "names": ["nike"], "source": "Public brand domain"},
+  {"group": "lenskart", "domain": "lenskart.com", "names": ["lenskart", "lenskart solutions"], "source": "Public brand domain"},
+  {"group": "flipkart", "domain": "flipkart.com", "names": ["flipkart"], "source": "Public brand domain"}
+]

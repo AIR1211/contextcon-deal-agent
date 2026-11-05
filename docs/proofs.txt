@@ -28,9 +28,17 @@ so p_i >= r_i, and claim 3 applies to each creator. QED
 CLAIM 5  The rule is fair and repeatable.
 The result depends only on the numbers, not on who is named first or when the request arrived. Tested directly.
 
+CLAIM 6  Tiebreaks always give one winner, in any input order.
+Candidates are compared by a tuple of published keys, left to right. Comparing tuples this way is a total order on
+distinct tuples, so it is transitive. The final key is a SHA-256 hash of the context and ID, so two different candidates
+differ there unless the hash collides. So exactly one candidate ranks first. Bands use a grid anchored to the set's best
+value, not pairwise closeness, which keeps "similar" transitive. QED
+
 WHAT WE CANNOT PROVE
 Honest limits: Myerson-Satterthwaite shows no mechanism is always efficient, voluntary, balanced and truth-telling.
 We keep the first three and reduce lying with evidence checks, but a side could still gain by misstating its limit.
+After settlement: the midpoint means a side that knows its own limit can work out the other side's limit for that option.
+We keep limits private during negotiation, but the final price itself reveals this. Disclosed as a known trade-off.
 Likelihood score: weights are our judgement until real outcomes exist. See the backtest in eval/.
 Fit score: measures agreement with our rules, not campaign results.
 Close estimate and tweak deltas: model estimates, labelled as such in the product.

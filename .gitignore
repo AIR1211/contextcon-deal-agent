@@ -8,3 +8,6 @@ CLAUDE.md
 eval/raw/
 eval/raw2/
 eval/__pycache__/
+deals*.db*
+.pytest_cache/
+deals_eval.db*

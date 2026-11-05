@@ -1,0 +1,22 @@
+{
+  "_about": "Suite 3, committed before running. Sample is drawn from Company Search, not Job Search, so the label is not selected on.",
+  "backtest": {
+    "question": "Do brands scored high without job data have influencer roles more often than the base rate?",
+    "niches": {"food": "Indian snack food brand", "beauty": "Indian skincare beauty brand", "fashion": "Indian streetwear fashion brand", "fitness": "Indian fitness wellness brand"},
+    "sizes": ["2-10", "11-50", "51-200", "201-500", "501-1000"],
+    "per_cell": 8,
+    "label": "Job Search finds at least one job with influencer in the title at that company",
+    "score": "scoring.likelihood with use_jobs=False, and influencer_staff removed",
+    "pass_rule": "Precision in the top quarter by score beats the overall base rate by a factor of at least 1.5",
+    "limits": "The label is a stand-in for willingness to buy. A pass does not show that real brands would buy."
+  },
+  "ig_small": {
+    "question": "Can public profile and reel fields be read for accounts under 10K followers?",
+    "queries": ["home cooking reel India", "street food vlog reel", "food influencers India reel", "skincare routine reel India", "Indian fitness creator reel", "budget makeup reel India", "college student vlog India reel", "desi recipe reel", "gym transformation reel India", "thrift fashion reel India", "small business owner reel India", "home baker reel India", "travel vlog reel India", "mehendi artist reel", "tiffin service reel", "yoga teacher reel India", "local cafe review reel", "skincare tips hindi reel", "hindi comedy reel creator", "college fest reel"],
+    "attempts_per_query": 3,
+    "max_reels": 45,
+    "max_profiles": 45,
+    "pass_rule": "Profile: followers, following, posts parse and handle matches the page title. Report separately per follower tier.",
+    "limits": "Accounts are found through social search, so this is not a random sample. No ground truth until a teammate checks an account they own."
+  }
+}
