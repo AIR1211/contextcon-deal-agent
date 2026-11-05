@@ -440,6 +440,24 @@ def test_search_result_alone_is_not_evidence_of_niche_fit(world):
     assert 'Allure Ink' in [b['name'] for b in r['rejected']] and 'Tasty Giants' not in [b['name'] for b in r['rejected']]
 
 
+def test_strongest_niche_evidence_is_assessed_first(world):
+    db.put('company', 'co_old', {'id': 'co_old', 'name': 'Old Record', 'description': 'a style magazine', 'niche': '', 'status': 'verified'})
+    db.put('company', 'co_new', {'id': 'co_new', 'name': 'Good Threads', 'industry': 'Retail Apparel and Fashion', 'description': 'fashion label for fashion lovers', 'niche': '', 'status': 'verified'})
+    names = [b['name'] for b in service.candidates_for('fashion')]
+    assert names == ['Good Threads']
+
+
+def test_scoring_continues_until_enough_real_matches(world, monkeypatch):
+    c = service.onboard_creator(CreatorIn(handle='f', niche='fashion', mock_stats=MOCK))
+    db.put('seed', 'fashion', {'at': 'now'})
+    for i in range(16):
+        db.put('company', f'co_w{i}', {'id': f'co_w{i}', 'name': f'Fashion {i:02d}', 'niche': 'fashion', 'status': 'verified', 'company_id': 1000 + i, 'tier': 'B', 'source': 'company_search'})
+    started = []
+    monkeypatch.setattr(service, 'BACKGROUND', True)
+    monkeypatch.setattr(service, '_start_assessing', lambda n, b: started.append(len(b)))
+    assert service.matches(c['id'])['assessing'] == 15 and started == [15]
+
+
 def test_minor_is_gated(world):
     d, end = go([creator(is_minor=True)['id']], company())
     assert end['state'] == 'blocked' and 'under 18' in end['final_reason']

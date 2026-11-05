@@ -159,7 +159,14 @@ def _brand_score(company: dict, niche: str, deep: bool, cached_only: bool = Fals
 
 def candidates_for(niche: str) -> list[dict]:
     brands = [b for b in db.all_docs('company') if b['status'] != 'blocked' and not is_intermediary(b.get('name'))]
-    return [b for b in brands if niches.related(b.get('niche'), niche) or niches.hits(niche, ' '.join(str(b.get(k) or '') for k in ('name', 'description', 'industry')))]
+    scored = []
+    for b in brands:
+        evidence = niches.hits(niche, ' '.join(str(b.get(k) or '') for k in ('name', 'description', 'industry')))
+        if evidence or niches.related(b.get('niche'), niche):
+            scored.append((evidence, b))
+    # Strongest evidence first, so paid lookups go to the most relevant brands, not the oldest records.
+    scored.sort(key=lambda x: (-x[0], str(x[1].get('name'))))
+    return [b for _, b in scored]
 
 
 def assess(brands: list[dict], niche: str) -> None:
@@ -212,8 +219,8 @@ def matches(creator_id: str, limit: int = 15) -> dict:
             continue
         row = {'company_id': b['id'], 'name': b['name'], 'domain': b.get('domain'), 'status': b['status'], 'tier': b.get('tier'), 'likelihood': s['score'], 'confidence': s['confidence'], 'reasons': s['reasons'], 'size_range': b.get('size_range'), 'source': b.get('source')}
         (ranked if s['eligible'] else rejected).append(row)
-    # Enough already scored means no background work is needed for this page.
-    todo = pending[:max(limit - len(ranked) - len(rejected), 0)]
+    # Keep scoring until there are enough real matches, not just enough looked-at brands.
+    todo = pending[:max(min(limit - len(ranked), 15), 0)]
     if todo and BACKGROUND:
         _start_assessing(niche, todo)
     elif todo:
