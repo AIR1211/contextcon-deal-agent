@@ -1,48 +1,59 @@
-CRUSTDATA FEATURES - tested 6 Nov 2026 on one team key
-Balance 15,200 -> 15,190.78 (9.22 credits used). Access differs per account, so check each teammate's key.
-Access list: GET /account/endpoints (free). Docs index: docs.crustdata.com/llms.txt
+CRUSTDATA FEATURE TEST - 6 Nov 2026, one team key
+Deep run used 73.5 credits. It was stopped early, so the checks listed under NOT TESTED did not finish.
+Small samples: treat percentages as indicative only. Access differs per account: GET /account/endpoints.
 
-ENABLED AND USEFUL
-/company/identify    Free. Brand name/domain -> company ID. boAt Lifestyle = 628835, confidence 1.0.
-                     Weak spot: "Imagine Marketing" returned 4+ unrelated companies at 1.0.
-                     Rule: a 1.0 score alone is not a match; prefer domain or corroborate.
-/company/enrich      Base 2-4 credits. Only basic_info unless "fields" is sent, e.g.
-                     ["headcount","funding","web_traffic","news"]. All four returned data for boAt.
-/company/search      0.03/result plus extras. India filter works; plain-language query returned
-                     small brands but also noise (a query for snack brands returned "SKIN SNACK",
-                     "D2C Bazaar"). Needs filtering or LLM re-ranking.
-/person/search       0.03/result plus extras. boAt + marketing department returned real titles
-                     (Category Growth & Marketing Lead, Head of Content). Replaces email lookup.
-                     Filter on experience.employment_details.current.company_id and
-                     basic_profile.normalized_title.department. basic_profile.current_title
-                     works as a response field, not a filter.
-                     assessment.authenticity.* filters exist; not tested.
-/person/enrich       1-9 credits. Enabled, not tested.
-/job/search          boAt marketing roles returned with links (10 total). Budget signal.
-/social_post/search  0.5/post. LinkedIn posts seen. Returned boAt's own posts with engagement.
-/web/search/live     1 credit/query. Web results good; found boAt's "Imagine Marketing Ltd" IR page.
-/web/enrich/live     Enabled, not tested. Likely the page fetch route; confirm in docs.
-autocomplete         Free for company and person search.
-/agent/query         Enabled, not tested, purpose not checked.
+COMPANY IDENTITY (free)
+Real brand domains: 16/16 correct.
+Lookalike or fake domains: 5/5 returned no match. No match means "can't verify", not proof of fraud.
+Names: top result was the expected brand in 10/17. Ties at the top score are common (up to 25).
+Legal or parent names (Imagine Marketing, Honasa, FSN) returned separate records with no link to the brand.
+Rule: identify by domain. Keep our own alias table with sources.
 
-UNRELIABLE
-/web/search/live with sources:["social"]
-                     1 of 5 queries returned 10 results including Instagram posts with like counts.
-                     The other 4 returned nothing. Bonus evidence only, never a required step.
+COMPANY ENRICH (2 credits with all standard groups)
+All 18 standard groups were present for 10/10 brands.
+Headcount data ended Sep 2026, about 2 months old.
+Suspect: Snitch resolved to "Snitch Support" (headcount 5) alongside $53M funding.
+Suspect: estimated revenue looks wrong for mCaffeine ($500M-1B with ~316 staff).
+Rule: show estimates as estimates with their date. Never use them alone for a decision.
+social_posts and technographics returned 403.
 
-DISABLED ON THIS KEY (403 on the one called; others listed disabled)
-/person/identify     Email -> person. So no direct email-based sender check.
-/person/contact/enrich, /batch/person/verify, all other batch routes,
-all /live professional network routes, /employee_review/enrich, /dev_platform/enrich
+PEOPLE SEARCH (about 0.13-0.2 credits per result)
+Marketing staff found at 9/10 brands (Snitch was the miss, likely the bad record above).
+Real influencer-marketing titles found at 6/10 brands by headline match, with some noise.
+Sender simulation, 4 real people: exact and lowercase name matched at the right company 4/4, wrong company 0/4.
+Former employee, 1 case: not found at the current filter, found at the past filter.
 
-NOT CHECKED
-Watcher: not in the access list and not called. Ask the Crustdata team on the floor.
+JOBS AND POSTS
+Job titles containing "influencer": 18,524 worldwide. India filter not tested.
+Social posts (0.5 each): LinkedIn only in all results. Newest post was 17 Sep 2026.
+"influencer marketing" and "looking for creators" posts in India returned real demand signals with noise.
 
-WHAT THIS MEANS FOR THE BUILD
-Sender check: parse name + email domain -> Company Identify on the domain -> compare with the brand
-  claimed -> Person Search for the name at that company ID. No match = "can't verify", not "fake".
-Hidden conflict: boAt -> Imagine Marketing is supportable. boAt's funding record lists an
-  imaginemarketingindia.com contact email, and web search finds the IR page. Name lookup alone
-  will not make the link, so store a parent/alias table with sources.
-Brand discovery: works for India, with re-ranking.
-Creator metrics: still not from Crustdata. Use YouTube API, creator login or labelled mocks.
+WEB SEARCH (1 credit per query, free if empty)
+News and web: 6/6 returned results, including the Minimalist acquisition news.
+Social source: 4/8 returned results, all from the same two food queries, all Instagram with like counts.
+Same query returned 3 and then 9 results, so it is not repeatable. Bonus evidence only.
+
+WEB FETCH (1 credit per page, median 12.5s)
+Instagram profile pages for Nike and boAt returned title and rounded follower count.
+YouTube channel page returned subscribers. A video page contained captionTracks data.
+YouTube /videos returned a consent wall. Socialblade returned a block page.
+success:true appeared on those blocked pages and on a missing reel, so validate page content.
+Only large accounts tested. Small creators and Instagram's terms for this use still need checking.
+
+CREATORS
+People search finds people self-described as creators, mostly founders and professionals.
+It does not give audience data. Audience demographics still need creator login or labelled mocks.
+
+DISABLED OR DENIED ON THIS KEY
+/person/identify, /person/contact/enrich, all batch routes, /live professional network routes,
+employee reviews endpoint, and the assessment field on person enrich.
+
+NOT TESTED
+/person/enrich: all calls were rejected because the test requested the denied assessment field.
+Watcher, /agent/query, autocomplete, error handling on bad input.
+
+BUILD DECISIONS
+Sender check: email domain -> Company Identify -> name search at current, then past, company.
+Brand contact: people search for influencer or marketing titles at the company ID.
+Creator check: Web Fetch public pages as cited evidence, with date, plus creator-supplied analytics.
+Parent links: own alias table with sources.
