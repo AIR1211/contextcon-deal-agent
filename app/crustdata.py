@@ -148,6 +148,11 @@ class Crustdata:
         d, ts = self.post('/person/search', body)
         return _dict(d).get('profiles') or [], ts
 
+    def marketing_contacts(self, company_id: int, limit=5):
+        body = {'filters': {'op': 'and', 'conditions': [{'field': CURRENT, 'type': '=', 'value': company_id}, {'field': 'basic_profile.normalized_title.department', 'type': '[.]', 'value': 'Marketing'}]}, 'fields': PERSON_FIELDS, 'limit': limit}
+        d, ts = self.post('/person/search', body)
+        return _dict(d).get('profiles') or [], ts
+
     def enrich_person(self, profile_url: str, fresh=False):
         d, ts = self.post('/person/enrich', {'professional_network_profile_urls': [profile_url], 'fields': ['basic_profile', 'experience']}, fresh=fresh)
         m = _matches(d)

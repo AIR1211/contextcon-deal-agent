@@ -5,7 +5,7 @@ import time
 from math import ceil
 
 from . import contract, db, llm, packages
-from .config import FEE_BRAND, FEE_CREATOR, TIERS
+from .config import FEE_BRAND, FEE_CREATOR, MAIL_DAYS, TIERS
 from .crustdata import Unavailable
 from .engine import settle
 from .models import CANT, DealIn, Fact, LEFT, VERIFIED, Terms
@@ -52,10 +52,44 @@ def public_deal(d: dict) -> dict:
     return out
 
 
-def _email(deal, step, to, subject, body):
+def _thread(deal, key, moment, sender, to, subject, body, simulated=False):
+    """Adds one email to the deal's thread, once. "moment" gives its estimated day in a real deal."""
+    thread = deal.setdefault('thread', [])
+    if not any(m['key'] == key for m in thread):
+        thread.append({'key': key, 'day': MAIL_DAYS[moment], 'from': sender, 'to': to, 'subject': subject, 'body': body, 'simulated_reply': simulated})
+
+
+def _email(deal, step, to, subject, body, moment=None):
     key = f"{deal['id']}:{step}:{to}"
-    if db.act(key, deal['id'], 'mock_email', {'to': to, 'subject': subject, 'body': body, 'delivered': False, 'note': 'Mock outbox: nothing is sent to real people.'}):
+    if moment:
+        _thread(deal, key, moment, 'Avuno', to, subject, body)
+    if db.act(key, deal['id'], 'mock_email', {'to': to, 'subject': subject, 'body': body, 'delivered': False, 'day': MAIL_DAYS.get(moment), 'note': 'Mock outbox: nothing is sent to real people.'}):
         db.event(deal['id'], 'message_queued', {'to': to, 'subject': subject})
+
+
+def _brand_mail(deal, company):
+    """Who the email is addressed to. Found leads stay in the mock outbox: this build contacts nobody real."""
+    if company.get('sender_email'):
+        return company['sender_email']
+    title = (deal.get('lead') or {}).get('title')
+    return f"{title} at {company['name']} (mock inbox)" if title else f"Marketing team at {company['name']} (mock inbox)"
+
+
+def _find_lead(company: dict) -> dict | None:
+    """The person to approach, from Crustdata. Only the role is kept: names aren't needed when nobody is contacted."""
+    if company.get('sender_name') or not company.get('company_id'):
+        return None
+    try:
+        people, ts = service.cd.contacts(company['company_id'])
+        source = 'Crustdata Person Search: influencer marketing staff'
+        if not people:
+            people, ts = service.cd.marketing_contacts(company['company_id'])
+            source = 'Crustdata Person Search: marketing staff'
+    except Unavailable:
+        return None
+    titles = [((p.get('basic_profile') or {}).get('current_title') or '').strip() for p in people]
+    title = next((t for t in titles if t), None)
+    return {'title': title, 'found': len(people), 'source': source, 'as_of': ts} if title else None
 
 
 def _people(deal):
@@ -116,6 +150,9 @@ def step_verify(deal):
         if clash:
             raise Stop('blocked', clash)
     deal['facts'] = _company_facts(company)
+    deal['lead'] = _find_lead(company)
+    if deal['lead']:
+        deal['facts'].append(Fact(subject=company['name'], field='lead', value=deal['lead']['title'], source=deal['lead']['source'], as_of=deal['lead']['as_of']).model_dump())
     deal['tier'] = company.get('tier') or 'C'
     deal['tier_terms'] = TIERS.get(deal['tier'], TIERS['C'])
     if company.get('sender_status') == LEFT:
@@ -126,8 +163,7 @@ def step_verify(deal):
 
 def step_pitch(deal):
     company, creators = _people(deal)
-    to = company.get('sender_email') or f"contact@{company.get('domain') or company['id']}"
-    _email(deal, 'pitch', to, f"Creator package for {company['name']}", llm.pitch_text({'name': company['name'], 'niche': company.get('niche')}, [{'handle': c['handle']} for c in creators], deal['terms']))
+    _email(deal, 'pitch', _brand_mail(deal, company), f"Creator package for {company['name']}", llm.pitch_text({'name': company['name'], 'niche': company.get('niche')}, [{'handle': c['handle']} for c in creators], deal['terms']), 'pitch')
 
 
 def step_await_company(deal):
@@ -141,6 +177,7 @@ def step_await_company(deal):
         db.event(deal['id'], 'simulated_company_replied', {'accept': True, 'is_mock': True})
     if not response.get('accept'):
         raise Stop('no_deal', 'The company declined.')
+    _thread(deal, f"{deal['id']}:reply", 'reply', company['name'], 'Avuno', 'Re: Creator package', 'Thanks, this looks relevant to us. What would this cost?', simulated=True)
     clause = response.get('non_standard_clause') or deal.get('non_standard_clause')
     if clause and not _decided(deal, 'non_standard_clause', f'The company wants a non-standard clause: "{clause}". Accept it?'):
         raise Stop('no_deal', 'Non-standard clause declined.')
@@ -175,6 +212,16 @@ def step_negotiate(deal):
         raise Stop('no_deal', 'No overlap between private limits.')
     deal['settlement'] = result.to_dict()
     db.event(deal['id'], 'terms_agreed', {'price': result.price, 'terms': result.terms, 'rule': result.rule})
+    # The emails show the negotiation a person would see. The final price is the engine's. The opening and counter are
+    # placed evenly around it, so together they reveal nothing beyond what the agreed price already does.
+    to = _brand_mail(deal, company)
+    t = Terms(**{k: result.terms[k] for k in Terms.model_fields})
+    ask = max(sum(packages.list_price(c, t) for c in creators), ceil(result.price * 1.1))
+    counter = max(2 * result.price - ask, 1)
+    summary = f"{t.reels} reel(s), {t.stories} story/stories and {t.usage_days} days of usage"
+    _email(deal, 'quote', to, 'Proposal and pricing', f"We propose INR {ask:,} for {summary}.", 'quote')
+    _thread(deal, f"{deal['id']}:counter", 'counter', company['name'], 'Avuno', 'Re: Proposal and pricing', f"That is above what we had in mind. Could you do INR {counter:,}?", simulated=True)
+    _email(deal, 'agreed', to, 'Agreed terms', f"Thanks. Both sides can agree at INR {result.price:,} for {summary}. We will send the contract next.", 'agreed')
 
 
 def step_contract(deal):
@@ -186,6 +233,7 @@ def step_contract(deal):
     deal['contract_source'] = 'Supplied by the brand' if deal.get('own_contract') else 'Written by Avuno'
     deal['contract_text'], deal['contract_hash'] = text, contract.contract_hash(text)
     db.act(f"{deal['id']}:contract", deal['id'], 'contract_issued', {'sha256': deal['contract_hash']})
+    _email(deal, 'contract', _brand_mail(deal, company), 'Contract for signature', f"The contract is ready. Its SHA-256 fingerprint is {deal['contract_hash'][:16]}...", 'contract')
 
 
 def step_recheck(deal):
@@ -237,6 +285,7 @@ def step_sign(deal):
         raise Pause('signature')
     for party in [company['id']] + deal['creator_ids']:
         db.act(f"{deal['id']}:sign:{party}", deal['id'], 'mock_signature', {'party': party, 'contract_sha256': deal['contract_hash'], 'is_mock': True})
+    _thread(deal, f"{deal['id']}:signed", 'signed', company['name'], 'Avuno', 'Re: Contract for signature', 'Signed on our side.', simulated=not deal.get('signature'))
 
 
 def step_fund(deal):
@@ -246,7 +295,7 @@ def step_fund(deal):
     db.act(f"{deal['id']}:hold", deal['id'], 'mock_funds_held', {'amount': held, 'of': total, 'is_mock': True, 'note': 'A real launch needs a licensed payment partner.'})
     company, creators = _people(deal)
     for c in creators:
-        _email(deal, 'start_work', '@' + c['handle'], 'Funds are held, please start', f"INR {held:,} is held. You can start work.")
+        _email(deal, 'start_work', '@' + c['handle'], 'Funds are held, please start', f"INR {held:,} is held. You can start work.", 'funded')
 
 
 def step_deliver(deal):
@@ -254,6 +303,7 @@ def step_deliver(deal):
         if not deal['simulate_parties']:
             raise Pause('delivery')
         deal['delivery'] = {'simulated': True, 'links': []}
+    _thread(deal, f"{deal['id']}:delivered", 'delivered', 'The creator', 'Avuno', 'Content is live', 'The content is posted with the paid partnership disclosed.', simulated=bool(deal['delivery'].get('simulated')))
 
 
 def step_approve(deal):
@@ -261,6 +311,7 @@ def step_approve(deal):
         if not deal['simulate_parties']:
             raise Pause('approval')
         deal['approval'] = {'simulated': True}
+    _thread(deal, f"{deal['id']}:approved", 'approved', _people(deal)[0]['name'], 'Avuno', 'Re: Content is live', 'Approved. Please release payment.', simulated=bool(deal['approval'].get('simulated')))
 
 
 def step_release(deal):
@@ -277,7 +328,7 @@ def step_invoice(deal):
     inv = contract.invoice(deal, company)
     deal['invoice'] = inv
     db.act(f"{deal['id']}:invoice", deal['id'], 'invoice', inv)
-    _email(deal, 'invoice', company.get('sender_email') or f"contact@{company.get('domain') or company['id']}", f"Invoice {inv['number']}", f"Total INR {inv['total']:,}. Mock invoice.")
+    _email(deal, 'invoice', _brand_mail(deal, company), f"Invoice {inv['number']}", f"Total INR {inv['total']:,}. Mock invoice.", 'invoice')
 
 
 STEPS = {'verify': step_verify, 'pitch': step_pitch, 'await_company': step_await_company, 'negotiate': step_negotiate, 'contract': step_contract, 'recheck': step_recheck, 'sign': step_sign, 'fund': step_fund, 'deliver': step_deliver, 'approve': step_approve, 'release': step_release, 'invoice': step_invoice}

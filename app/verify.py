@@ -179,7 +179,7 @@ def verify_sender(cd: Crustdata, name, email, company_id, company_domain, profil
 
 
 def risk_tier(brand_status: str, sender_status: str) -> str:
-    """Small is not the same as fake. Only blocked stops a deal outright."""
+    """Less evidence means stricter terms, not rejection. Only blocked stops a deal outright."""
     if brand_status == BLOCKED or sender_status == BLOCKED:
         return 'blocked'
     if brand_status == VERIFIED and sender_status == VERIFIED:

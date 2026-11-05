@@ -1,35 +1,40 @@
-DEMO SCRIPT - 2 minutes
-Before recording: run the app, open each brand once so results are cached, and do one full practice run.
-Say out loud or show on screen: "Brand accounts here are played by our team. Nothing reaches real companies."
-Use labelled sample creators or teammates' own accounts. Do not show real third-party creators applying to a brand.
+DEMO PLAN
+Goal: show one full deal, then show it surviving failure. Runs the same whether live or recorded.
 
-0:00  One line. "Agencies skip small creators and small brands because small deals aren't worth a person's time.
-      Avuno does the whole job: from finding the brand to the paid invoice."
+SAY THIS EARLY, AND KEEP IT ON SCREEN
+"Company and people data are live from Crustdata. Nobody real is contacted: we play the brand, and email, signatures and
+payments are mocks. A real deal takes about two weeks of email; here that time is compressed."
 
-0:10  CREATOR SIDE. Pick a sample fashion creator. Show live stats and evidence with sources and dates.
-0:25  Brands page. Point at the striped bar and Crustdata chip: this search is live. Read one "why" line.
-0:35  Type nykaa.com in Find brand. Open Media packs. Change usage to 90 days and show "Did this tweak help?".
-      Click Apply. Repeat for a second brand.
-0:50  Switch to a second creator. Turn on Auto Deal. Open Applications to show packs sent automatically, and the
-      skipped brands with reasons (Settings shows the thresholds).
+BEFORE ANY RUN
+1. python -m app.prewarm                    Warm the cache for known niches.
+2. Open each brand you will use once.       So every page answers from the cache.
+3. Settings: Watchable pace on (900 ms). Animations Auto or Full.
+4. Start from a clean database, then add sample creators. Use labelled samples or teammates' accounts, never real third parties.
+5. Rehearse the exact path twice, on the same laptop and network. Keep a recording as the fallback.
+6. Have a phone hotspot ready, in case the venue's connection blocks the lookups.
 
-1:05  BRAND SIDE. Switch to Brand. Register as Nykaa, domain nykaa.com, with your own name and email.
-      It shows Verified company but Can't verify for the sender, because that person isn't found at Nykaa.
-      Say: "It refuses to overclaim, even for us."
-1:15  Offers. Creators are ranked, each with a reason and the tiebreak that decided the order. Choose one.
-
-1:25  DEAL. Watch it run: live lookups in the activity list, terms agreed inside both private limits, contract hash.
-      It stops at Re-check, then waits at Ready to sign. Open the contract and click Sign.
-1:45  Paid: money released exactly once, invoice issued, ledger visible. Point at "Mock" labels.
-
-1:50  PROOF. Deals page, Crash during payment. Show the crash, click Resume, and show one payout, not two.
-      Close: "Every fact has a source and a date. When it can't check something, it says so."
+THE PATH (2 minutes)
+0:00 One line. "Agencies are paid to find, vet, negotiate and collect. Avuno does the whole job, for any size of creator or brand."
+0:10 Creator: show live stats, each with a source and date.
+0:25 Brands: live ranking with a reason on each. Find nykaa.com, open Media packs, try a tweak, Apply.
+0:40 Second creator applies. A third turns on Auto Deal: packs go out, and skipped brands show why.
+0:55 Brand: register as the brand using a team email. Company verified; the sender is not. "It refuses to overclaim, even for us."
+1:05 Offers: ranked, with reasons and the rule that decided the order. Choose one.
+1:15 Deal: person to approach found on Crustdata, email thread with day labels, live lookups, agreed price inside both limits.
+1:35 Re-check runs live before signing. Open the contract, then Sign. Funds held, delivered, released, invoice issued.
+1:50 Proof: Deals page, Crash during payment. Resume. One payout, not two.
 
 IF ASKED
-Is this real? Company and people data are live from Crustdata. Brands are played by us; payments and signatures are mocks.
-Why is it not instant? Real lookups take time, and the pace setting also slows steps so viewers can follow. The screen says so.
-Where is the AI? Code decides, so the same case always gets the same answer. The LLM only reads messy text, and it is optional.
-Hardest case? A contact leaves mid-deal, or two people share a name: a name match alone is treated as weak evidence.
+Is this real? Data is live. The brand, email, signatures and payments are simulated, and labelled.
+Why does it take time on screen? Real lookups take time. A setting also slows steps so viewers can follow, and the page says so.
+Where is the AI? Code decides, so the same case gets the same answer. The optional LLM only reads messy text.
+Hardest case? Two people share a name, or a contact leaves mid-deal. A name match alone stays weak evidence.
+What would you do next? Real delivery checking, sign-in and ownership checks, then real email and payments.
 
-FALLBACKS
-If the live demo breaks in finals, play the video. Keep the app's cache warm by running: python -m app.prewarm
+WHAT COULD GO WRONG, AND THE ANSWER
+Crustdata slow or down   Pages answer from cache. A failed re-check pauses the deal and says why: show that as a feature.
+New niche typed live     Use a pre-warmed niche. A new one fills in over a minute.
+Instagram page unread    Use sample creators. The app says "can't verify" rather than guessing.
+Deal page stuck          Refresh: the deal resumes from saved state.
+Laptop or network dies   Play the recording.
+Do not improvise with unrehearsed brands, handles or niches on stage.

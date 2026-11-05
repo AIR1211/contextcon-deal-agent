@@ -5,7 +5,7 @@ Chosen: neutral broker with one published rule. Brand-side needs creator data we
 reason to trust it. Cost: it cannot advocate for a creator who sets a low floor, so we add price guidance.
 
 D2 Where does the flow start?  Options: brand brief first, creator first.
-Chosen: creator first, with a company side too. Finding brands for small creators is the service nobody offers them.
+Chosen: creator first, with a company side too. Finding brands is the hardest part of a creator's job, whatever their size.
 
 D3 Two negotiation engines or one?
 Chosen: one engine, two views. Two engines could disagree, and neither side could trust the result.
@@ -19,7 +19,7 @@ Tested: no. Run 1 found 4 same-name false matches, so a name match is only weak 
 
 D6 How do we find brands?
 Tested: plain Company Search found known brands on 1 of 4 queries. Job Search finds brands already hiring for
-influencer roles but skews large. With a size filter, Company Search does return small brands. We use both.
+influencer roles but skews large. With a size filter, Company Search returns brands of each size. We use both.
 
 D7 Where does creator data come from?
 Tested: Web Fetch reads public Instagram pages; a direct request got nothing. Views are absent, so engagement uses likes
@@ -32,8 +32,8 @@ D9 Stack: FastAPI and SQLite in one process. Fast to build and easy to run. A re
 
 D10 Tiebreaks: published chains, not manual choice or hidden scores.
 Creator choosing a company: pay (within 2% is a tie) -> safer payment -> fewer restrictions -> fit -> earliest -> fair lot.
-Company choosing a creator: fit -> evidence -> price -> engagement -> fewer deals so far -> smaller creator -> fair lot.
-Merit comes first; then the choice spreads income to smaller creators, which is the product's purpose. Fair lot is a
+Company choosing a creator: fit -> evidence -> price -> engagement -> fewer deals so far -> fair lot.
+Merit comes first, then work spreads to those with fewer deals. Follower count plays no part. Fair lot is a
 hash, not database order, so nobody wins an exact tie by signing up first.
 Equal-surplus options: fewer restrictions on the creator. Race for exclusivity: first to sign, reserved atomically.
 
@@ -48,3 +48,5 @@ D15 Showing the work. Deal steps make real Crustdata lookups and list each one (
 pace setting slows steps for viewers, and the deal page says so while it is on. GSAP motion follows real events only.
 D16 Auto Deal thresholds: likelihood >= 55, confidence >= 40, verified or partly verified, at most 10. Stricter than the 45
 needed just to be shown, because it acts without asking. It only applies; the brand still chooses and signs.
+D17 Positioning: for creators and brands of any size. Follower count isn't scored or used in tiebreaks.
+D18 Time: a real deal takes days of email. Each deal shows its email thread with estimated days, labelled as simulated and compressed.

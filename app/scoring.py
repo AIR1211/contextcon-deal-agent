@@ -88,7 +88,7 @@ def gates(creator: dict, company: dict) -> list[str]:
 
 
 def fit(creator: dict, company: dict) -> dict:
-    """No follower minimum. Small creators compete on engagement and niche."""
+    """Follower count isn't scored. Creators of any size compete on engagement, content and audience."""
     s = creator.get('stats') or {}
     strength = s.get('strength', 0.3)
     er = None if s.get('engagement_anomalous') else s.get('engagement_rate')
@@ -133,7 +133,7 @@ def why_brand(name: str, s: dict | None, status: str) -> str:
     if (x.get('influencer_staff') or 0) >= 0.5: good.append('has staff running creator campaigns')
     if (x.get('funding') or 0) >= 0.7: good.append('raised funding recently')
     if (x.get('growth') or 0) >= 0.6: good.append('is growing')
-    caution = {'weak_match': 'Its identity is only partly confirmed, so money is held upfront.', 'partly_verified': 'It is a small or newly checked brand, so money is held upfront.'}.get(status)
+    caution = {'weak_match': 'Its identity is only partly confirmed, so money is held upfront.', 'partly_verified': 'It has less public evidence so far, so money is held upfront.'}.get(status)
     return _sentence(name, good[:3], caution, f'Little public evidence about {name} so far.')
 
 
@@ -145,6 +145,5 @@ def why_creator(creator: dict, f: dict, company: dict) -> str:
     if (x.get('content') or 0) >= 0.4: good.append(f"posts about {company.get('niche') or creator.get('niche')}")
     if (x.get('attention') or 0) >= 0.4: good.append(f"has an engaged audience ({round(s.get('engagement_rate', 0) * 100 + 1e-9, 1)}%)")
     if (x.get('audience') or 0) >= 0.7: good.append('reaches your market, self-reported')
-    if s.get('followers') and s['followers'] < 50000: good.append('is small enough to be affordable')
     caution = 'Based on public data only, so ask for analytics.' if f.get('confidence', 0) < 50 else None
     return _sentence('@' + creator['handle'], good[:3], caution, f"Little public evidence about @{creator['handle']} so far.")

@@ -54,9 +54,9 @@ def test_lot_is_not_always_won_by_the_same_id():
     assert wins == {'a', 'b'}
 
 
-def test_creator_tie_favours_smaller_creator_after_merit():
+def test_follower_count_never_decides_a_tie():
     r = rank_creators([row('big', followers=90000), row('small', followers=3000)], 'x')
-    assert top(r) == 'small' and r[0]['decided_by'] == 'Smaller creator'
+    assert 'Fair lot' in r[0]['decided_by']
 
 
 def test_creator_merit_comes_before_size():

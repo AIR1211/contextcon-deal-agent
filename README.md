@@ -1,6 +1,6 @@
 # Avuno
 
-An AI agent that replaces an influencer-marketing agency for small creators and small brands. It finds the other side, builds a media pack, negotiates, writes the contract and carries the deal to a paid invoice. A person is asked only when the answer changes the result.
+An AI agent that does the work of an influencer-marketing agency, for creators and brands of any size. It finds the other side, builds a media pack, negotiates, writes the contract and carries the deal to a paid invoice. A person is asked only when the answer changes the result.
 
 Built at ContextCon 04, IIT Kanpur. **Work in progress:** the full judge-facing README is written last.
 

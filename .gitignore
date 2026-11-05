@@ -14,3 +14,6 @@ valuable_insights.md
 deals_eval2.db*
 data/*.local.json
 *.zip
+*.mp4
+*.webm
+demo_build/

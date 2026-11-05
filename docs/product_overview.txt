@@ -1,13 +1,13 @@
 PRODUCT OVERVIEW - ContextCon Deal Agent (working draft, 6 Nov 2026)
 
 ONE LINE
-An AI agent that replaces an influencer-marketing agency for small brands and small creators: it takes a
+An AI agent that does the work of an influencer-marketing agency, for creators and brands of any size: it takes a
 brand's request and carries it through to a signed contract and a paid invoice.
 
 THE SERVICE
 Replaces: talent managers and influencer-marketing agencies.
 Who pays today: creators pay commission; brands pay retainers or campaign margins.
-Who is underserved: small creators and small brands, because small deals are not worth a person's time.
+Why now: most of an agency's work is lookups, email and paperwork, which an agent can do for any size of deal.
 Position: neutral broker. One published rule for both sides, private limits, disclosed fee on closed deals.
 
 END-TO-END FLOW
@@ -16,9 +16,9 @@ Company side: register domain or Instagram -> verify -> rank creators in the nic
 Shared: pitch -> one negotiation engine -> contract -> re-check -> sign -> funds held -> deliver -> approve -> release -> invoice.
 A person is asked only on "can't verify", a contact who left, no overlap, or a non-standard clause.
 
-SMALL CREATORS AND COMPANIES (the main focus)
-No follower minimum. Creator bundles. Starter media kit. Barter check. Payment protection.
-No website required: Instagram, GSTIN or bio code, with stricter terms instead of rejection.
+ANY SIZE OF CREATOR OR BRAND
+Follower count isn't scored. Creator bundles and payment protection for everyone.
+No website required: Instagram or GSTIN, with stricter terms instead of rejection.
 
 FEATURES (score out of 5 is the team's judgement of value; status is the plan for tonight)
 AGENT

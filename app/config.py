@@ -37,6 +37,9 @@ ASSUMPTIONS = {
     'default_floor_share_of_list': Fraction(7, 10),
 }
 
+# Our estimate of when each email would happen in a real deal, in days from the first pitch. Shown as an estimate.
+MAIL_DAYS = {'pitch': 0, 'reply': 2, 'quote': 2, 'counter': 3, 'agreed': 4, 'contract': 5, 'signed': 6, 'funded': 6, 'delivered': 13, 'approved': 14, 'paid': 14, 'invoice': 14}
+
 # Offer review limits. Each finding in app/offers.py cites one of these.
 OFFER_RULES = {'max_usage_days': 180, 'max_exclusivity_days': 90, 'max_payment_days': 45, 'max_revisions': 3, 'kill_fee_above': 20000}
 

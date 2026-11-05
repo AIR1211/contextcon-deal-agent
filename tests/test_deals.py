@@ -708,6 +708,54 @@ def test_interface_files_are_always_rechecked(world):
     assert client.get('/static/motion.js').headers['cache-control'] == 'no-cache'
 
 
+def test_email_thread_runs_in_order_and_ends_at_the_engines_price(world):
+    d, end = go([creator()['id']], company())
+    days = [m['day'] for m in end['thread']]
+    assert days == sorted(days) and days[-1] >= 10
+    agreed = next(m for m in end['thread'] if m['subject'] == 'Agreed terms')
+    assert f"INR {end['settlement']['price']:,}" in agreed['body']
+    assert any(m['simulated_reply'] for m in end['thread'])
+
+
+def test_email_thread_does_not_reveal_private_limits(world):
+    co = company(ceiling=44444, limits=CompanyLimits(ceiling=44444, value_per_reel=33333))
+    _, end = go([creator(floor=2222)['id']], co)
+    text = json.dumps(end['thread'])
+    assert '44,444' not in text and '33,333' not in text and '2,222' not in text
+
+
+def test_opening_and_counter_are_placed_evenly_around_the_price(world):
+    import re
+    _, end = go([creator()['id']], company())
+    amount = lambda subject: int(re.search(r'INR ([\d,]+)', next(m for m in end['thread'] if m['subject'] == subject)['body'])[1].replace(',', ''))
+    assert amount('Proposal and pricing') + amount('Re: Proposal and pricing') == 2 * end['settlement']['price']
+
+
+def test_thread_has_no_duplicates_after_a_crash_at_any_step(world):
+    co, cid = company(), creator()['id']
+    for step in ('pitch', 'negotiate', 'contract', 'fund', 'invoice'):
+        d = orch.start(DealIn(creator_ids=[cid], company_id=co['id']))
+        with pytest.raises(orch.SimulatedCrash):
+            orch.run(d['id'], crash_after=step)
+        end = orch.run(d['id'])
+        keys = [m['key'] for m in end['thread']]
+        assert end['state'] == 'done' and len(keys) == len(set(keys))
+
+
+def test_lead_comes_from_crustdata_and_keeps_only_the_role(world):
+    world.people[('x', 'y')] = 'current'
+    orig = world.answer
+    def answer(path, body):
+        if path == '/person/search' and body['filters']['conditions'][1]['field'] == 'basic_profile.headline':
+            return {'profiles': [{'basic_profile': {'name': 'A Real Person', 'current_title': 'Influencer Marketing Lead'}}]}
+        return orig(path, body)
+    world.answer = answer
+    co = company(sender_name=None, sender_email=None)
+    _, end = go([creator()['id']], co)
+    assert end['lead']['title'] == 'Influencer Marketing Lead' and 'A Real Person' not in json.dumps(end)
+    assert 'Influencer Marketing Lead at Real Brand (mock inbox)' in end['thread'][0]['to']
+
+
 def test_minor_is_gated(world):
     d, end = go([creator(is_minor=True)['id']], company())
     assert end['state'] == 'blocked' and 'under 18' in end['final_reason']
@@ -812,7 +860,9 @@ def test_small_creator_can_outrank_large_on_fit():
     co = {'niche': 'food'}
     small = {'niche': 'food', 'audience_country_pct': 95, 'stats': {'followers': 4000, 'engagement_rate': 0.06, 'strength': 0.7, 'captions': ['food recipe'] * 3, 'reels_read': 3}}
     big = {'niche': 'food', 'audience_country_pct': 40, 'stats': {'followers': 900000, 'engagement_rate': 0.002, 'strength': 0.7, 'captions': ['travel', 'car', 'food'], 'reels_read': 3}}
-    assert scoring.fit(small, co)['score'] > scoring.fit(big, co)['score']
+    assert scoring.fit(small, co)['score'] > scoring.fit(big, co)['score']          # Evidence wins, not size.
+    flipped = {**big, 'stats': {**big['stats'], 'followers': 2000}}
+    assert scoring.fit(flipped, co)['score'] == scoring.fit(big, co)['score']      # Followers alone change nothing.
 
 
 def test_missing_evidence_lowers_confidence_not_score_only():

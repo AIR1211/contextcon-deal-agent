@@ -20,7 +20,7 @@ _candidates: dict = {}
 _scores_memo: dict = {}
 _running: set[str] = set()
 _guard = threading.Lock()
-SEARCH_SIZES = ('2-10', '11-50', '51-200')      # Small brands first: the customers agencies skip.
+SEARCH_SIZES = ('2-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000')      # Every size of brand.
 
 
 def public_creator(c: dict) -> dict:

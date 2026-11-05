@@ -50,14 +50,13 @@ def rank_offers(offers: list[dict], context: str) -> list[dict]:
 
 
 def rank_creators(rows: list[dict], context: str) -> list[dict]:
-    """A company choosing between creators. Merit first, then evidence, then the choice that spreads income to smaller creators."""
+    """A company choosing between creators. Merit first, then evidence, then the choice that spreads work to those with fewer deals so far."""
     return _rank(rows, [
         ('Better fit', lambda r: r.get('fit', 0) // SCORE_BAND),
         ('Stronger evidence', lambda r: r.get('confidence', 0) // SCORE_BAND),
         ('Lower estimated price', lambda r: _pay_band(-r.get('list_price_estimate', 0), 0)),
         ('Higher engagement', lambda r: round((r.get('engagement_rate') or 0) * 200)),
         ('Fewer paid deals so far', lambda r: -r.get('deals_done', 0)),
-        ('Smaller creator', lambda r: -(r.get('followers') or 0)),
     ], context, 'creator_id')
 
 

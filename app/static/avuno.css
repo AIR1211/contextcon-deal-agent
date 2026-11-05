@@ -103,6 +103,8 @@ details.ev{margin-top:var(--s2);font-size:12px;color:var(--ink-3)} details.ev su
 article.card{transition:box-shadow .2s ease,transform .2s ease} article.card:hover{box-shadow:var(--e3);transform:translateY(-2px)}
 .btn{transition:background .15s ease,transform .1s ease} .btn:active:not(:disabled){transform:scale(.98)} .nav a{transition:background .15s ease,color .15s ease}
 .pipe .n i{animation:breathe 1.2s ease-in-out infinite} @keyframes breathe{0%,100%{opacity:1}50%{opacity:.45}}
+.thread{display:flex;flex-direction:column;gap:6px} .mail{border:1px solid var(--line);border-radius:var(--r2);padding:var(--s2) var(--s3);background:#FCFAF5} .mail.in{background:var(--pure);margin-left:var(--s5)} .mail.out{margin-right:var(--s5)}
+.mail summary{display:flex;align-items:center;gap:var(--s2);font-size:13px;flex-wrap:wrap;list-style:none} .mail summary::-webkit-details-marker{display:none} .daychip{font:600 11px var(--sans);color:var(--ochre-deep);background:var(--ochre-soft);border-radius:999px;padding:1px 8px;white-space:nowrap} .mail-who{font-weight:600} .mail-sub{color:var(--ink-2);flex:1;min-width:120px}
 .hide-why .whyline{display:none} .hide-evidence details.ev,.hide-evidence .evidence-card{display:none} .hide-tie .tie{display:none} .hide-fetching .live-chip{display:none}
 .compact .card{padding:var(--s4)} .compact .grid,.compact .stack,.compact .split{gap:var(--s3)} .compact .tile .v{font-size:30px} .compact h1{font-size:38px} .compact .main{padding-top:var(--s5)}
 .setgroup{font:500 12px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin:var(--s4) 0 var(--s1)} .setrow select,.setrow input[type=text]{width:190px}
