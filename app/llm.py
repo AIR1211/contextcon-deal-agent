@@ -4,7 +4,7 @@ import hashlib
 import json
 import re
 
-from . import config, db
+from . import config, db, settings
 from .models import now
 
 REQUIRED = ("brand", "budget", "niche", "email")
@@ -95,7 +95,7 @@ def pitch_text(company: dict, creators: list[dict], pack: dict) -> str:
     names = ', '.join('@' + c['handle'] for c in creators)
     t = pack
     fallback = f"Hello {company.get('name')} team,\n\nWe represent {names}, and think they suit your {company.get('niche') or 'brand'} audience. Proposed package: {t.get('reels', 1)} reel(s), {t.get('stories', 0)} story/stories and {t.get('usage_days', 30)} days of usage. Evidence for each stat is attached.\n\nThis message was written by an AI agent acting as a neutral broker."
-    if not config.LLM_POLISH:
+    if not (config.LLM_POLISH or settings.get('app')['ai_pitch_polish']):
         return fallback
     text = _ask_model(f'Make this pitch warm and specific, under 80 words. Keep every fact, number and the AI disclosure. Add nothing new.\n\n{fallback}', max_tokens=600)
     # A rewrite that changes any number is thrown away.

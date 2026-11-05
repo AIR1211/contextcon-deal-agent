@@ -21,14 +21,30 @@ def gate_failures(deal: dict, company: dict, creators: list[dict]) -> list[str]:
     return f
 
 
-def render(deal: dict, company: dict, creators: list[dict]) -> str:
+def render(deal: dict, company: dict, creators: list[dict], clauses: dict | None = None) -> str:
+    """Optional clauses come from the brand's settings. Fees, usage, exclusivity and ad disclosure are always included."""
+    clauses = clauses or {}
     s = deal['settlement']
     t = s['terms']
     tier = deal['tier_terms']
     names = {c['id']: c['handle'] for c in creators}
     pay = '\n'.join(f"  - @{names[c]}: INR {s['creator_prices'][c]:,} gross, INR {s['creator_net'][c]:,} after the {FEE_CREATOR * 100}% fee" for c in sorted(s['creator_prices']))
-    usage = t.get('usage_days', 30)
-    excl = t.get('exclusivity_days', 0)
+    usage, excl = t.get('usage_days', 30), t.get('exclusivity_days', 0)
+    kill = '\nIf the brand cancels after work starts, the creator keeps the amount already held for work done (kill fee).' if clauses.get('clause_kill_fee', True) else ''
+    disputes = "Disputes go first to the broker's human review, then to online arbitration under the Arbitration and Conciliation Act, 1996." if clauses.get('clause_arbitration', True) else "Disputes go first to the broker's human review, then to the courts with jurisdiction."
+    sections = [
+        ('DELIVERABLES', f"{t.get('reels', 0)} reel(s) and {t.get('stories', 0)} story/stories per creator, with up to {t.get('revisions', 1)} revision round(s)."),
+        ('FEES', f"Agreed price: INR {s['price']:,}. Brand pays INR {s['brand_pays']:,}, including a {FEE_BRAND * 100}% broker fee.\n{pay}"),
+        ('PAYMENT', f"{tier['upfront_pct']}% of the brand payment is held before work starts. The balance is due on delivery approval.\nHeld funds are released to the creator when the brand approves, or automatically 7 days after delivery with no objection.{kill}"),
+        ('USAGE RIGHTS', f"The brand may reuse the content for {usage} days from first posting{', including paid advertising' if t.get('paid_ads') else ', organic use only'}.\nThe creator keeps ownership of the content."),
+        ('EXCLUSIVITY', f'The creator will not promote direct competitors for {excl} days.' if excl else 'None.'),
+        ('AD DISCLOSURE', 'All posts must clearly disclose the paid partnership, following ASCI influencer guidelines.'),
+        ('TAX', 'Each party is responsible for its own taxes. GST and TDS details are shown on the invoice.'),
+        ('DATA AND CONSENT', 'Each party consents to the processing of its data for this deal, and evidence is kept in the audit log.'),
+        ('DISPUTES', disputes),
+        ('ELECTRONIC RECORD', 'This agreement is an electronic record under the Information Technology Act, 2000. Stamp duty, where applicable, is handled by the e-sign provider.'),
+    ]
+    body = '\n\n'.join(f'{i}. {name}\n{text}' for i, (name, text) in enumerate(sections, 1))
     return f"""INFLUENCER SERVICES AGREEMENT
 {NOTICE}
 Date: {date.today().isoformat()}   Deal: {deal['id']}
@@ -38,39 +54,7 @@ Brand: {company.get('name')} ({company.get('domain') or 'no website; identity ev
 Creator(s): {', '.join('@' + c['handle'] for c in creators)}
 Broker: Avuno, an AI agent acting as a disclosed neutral broker. The broker is not a party to the services.
 
-1. DELIVERABLES
-{t.get('reels', 0)} reel(s) and {t.get('stories', 0)} story/stories per creator, with up to {t.get('revisions', 1)} revision round(s).
-
-2. FEES
-Agreed price: INR {s['price']:,}. Brand pays INR {s['brand_pays']:,}, including a {FEE_BRAND * 100}% broker fee.
-{pay}
-
-3. PAYMENT
-{tier['upfront_pct']}% of the brand payment is held before work starts. The balance is due on delivery approval.
-Held funds are released to the creator when the brand approves, or automatically 7 days after delivery with no objection.
-If the brand cancels after work starts, the creator keeps the amount already held for work done (kill fee).
-
-4. USAGE RIGHTS
-The brand may reuse the content for {usage} days from first posting{', including paid advertising' if t.get('paid_ads') else ', organic use only'}.
-The creator keeps ownership of the content.
-
-5. EXCLUSIVITY
-{f'The creator will not promote direct competitors for {excl} days.' if excl else 'None.'}
-
-6. AD DISCLOSURE
-All posts must clearly disclose the paid partnership, following ASCI influencer guidelines.
-
-7. TAX
-Each party is responsible for its own taxes. GST and TDS details are shown on the invoice.
-
-8. DATA AND CONSENT
-Each party consents to the processing of its data for this deal, and evidence is kept in the audit log.
-
-9. DISPUTES
-Disputes go first to the broker's human review, then to online arbitration under the Arbitration and Conciliation Act, 1996.
-
-10. ELECTRONIC RECORD
-This agreement is an electronic record under the Information Technology Act, 2000. Stamp duty, where applicable, is handled by the e-sign provider.
+{body}
 """
 
 

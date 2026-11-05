@@ -1,6 +1,7 @@
 """HTTP API for both dashboards. Run: uvicorn app.api:app --reload  Interactive docs are at /docs. No login in this build."""
 import asyncio
 import json
+import re
 import time
 from pathlib import Path
 
@@ -11,11 +12,21 @@ from pydantic import BaseModel, Field
 
 from . import applications, config, db, llm, offers, orchestrator as orch, service, settings
 from .crustdata import Unavailable
-from .models import CompanyIn, CompanyLimits, CompanyResponse, CreatorIn, DealIn, Decision, Terms
+from .models import CompanyIn, CompanyLimits, CompanyResponse, CreatorIn, CreatorLimits, DealIn, Decision, Terms
 
 app = FastAPI(title='Avuno')
 STATIC = Path(__file__).parent / 'static'
-app.mount('/static', StaticFiles(directory=STATIC), name='static')
+
+
+class FreshStatic(StaticFiles):
+    """Browsers must check for changes, so a refresh always gets the current interface."""
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers['Cache-Control'] = 'no-cache'
+        return response
+
+
+app.mount('/static', FreshStatic(directory=STATIC), name='static')
 
 
 def need(kind: str, id_: str) -> dict:
@@ -42,7 +53,7 @@ def resume_interrupted():
 
 @app.get('/')
 def home():
-    return FileResponse(STATIC / 'index.html')
+    return FileResponse(STATIC / 'index.html', headers={'Cache-Control': 'no-cache'})
 
 
 @app.post('/api/creators')
@@ -67,6 +78,20 @@ def get_creator(cid: str):
 def check_ownership(cid: str):
     need('creator', cid)
     return service.check_ownership(cid)
+
+
+@app.get('/api/creators/{cid}/limits')
+def read_limits(cid: str):
+    """The creator's own private limits, for their Settings page. There is no login in this build."""
+    return need('creator', cid)['limits']
+
+
+@app.post('/api/creators/{cid}/limits')
+def write_limits(cid: str, x: CreatorLimits):
+    c = need('creator', cid)
+    c['limits'] = x.model_dump()
+    db.put('creator', cid, c)
+    return c['limits']
 
 
 @app.get('/api/creators/{cid}/matches')
@@ -276,6 +301,19 @@ def company_response(did: str, r: CompanyResponse):
 def decide(did: str, x: Decision):
     need('deal', did)
     return orch.public_deal(orch.decide(did, x.approve, x.note, x.new_floor_reel))
+
+
+class OwnContract(BaseModel):
+    text: str = Field(min_length=200, max_length=60000)
+
+
+@app.post('/api/deals/{did}/own-contract')
+def own_contract(did: str, x: OwnContract):
+    """A brand's own contract replaces ours, but must still cover ad disclosure."""
+    need('deal', did)
+    if not re.search(r'disclos|ASCI|paid partnership', x.text, re.I):
+        raise HTTPException(400, 'The contract must include an ad disclosure clause, as ASCI guidelines require.')
+    return orch.public_deal(orch.set_field(did, 'own_contract', x.text))
 
 
 @app.post('/api/deals/{did}/sign')

@@ -103,5 +103,8 @@ details.ev{margin-top:var(--s2);font-size:12px;color:var(--ink-3)} details.ev su
 article.card{transition:box-shadow .2s ease,transform .2s ease} article.card:hover{box-shadow:var(--e3);transform:translateY(-2px)}
 .btn{transition:background .15s ease,transform .1s ease} .btn:active:not(:disabled){transform:scale(.98)} .nav a{transition:background .15s ease,color .15s ease}
 .pipe .n i{animation:breathe 1.2s ease-in-out infinite} @keyframes breathe{0%,100%{opacity:1}50%{opacity:.45}}
+.hide-why .whyline{display:none} .hide-evidence details.ev,.hide-evidence .evidence-card{display:none} .hide-tie .tie{display:none} .hide-fetching .live-chip{display:none}
+.compact .card{padding:var(--s4)} .compact .grid,.compact .stack,.compact .split{gap:var(--s3)} .compact .tile .v{font-size:30px} .compact h1{font-size:38px} .compact .main{padding-top:var(--s5)}
+.setgroup{font:500 12px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);margin:var(--s4) 0 var(--s1)} .setrow select,.setrow input[type=text]{width:190px}
 @media (prefers-reduced-motion:reduce){.spin,.stripe,.live-chip i,.pipe .n i{animation:none} article.card,.btn{transition:none}}
 @media (max-width:980px){.shell{grid-template-columns:1fr}.side{position:static;height:auto;border-right:0;border-bottom:1px solid var(--line)}.nav{flex-direction:row;flex-wrap:wrap}.side-foot{display:none}.main{padding:var(--s5) var(--s4) var(--s7)}.split,.onb,.g2,.g3,.g4{grid-template-columns:1fr}.hero-title{font-size:44px}h1{font-size:36px}}

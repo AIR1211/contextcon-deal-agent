@@ -11,7 +11,7 @@ from .engine import settle
 from .models import CANT, DealIn, Fact, LEFT, VERIFIED, Terms
 from .scoring import gates
 from . import niche as niches
-from . import service
+from . import service, settings
 from .verify import verify_sender
 
 ORDER = ['verify', 'pitch', 'await_company', 'negotiate', 'contract', 'recheck', 'sign', 'fund', 'deliver', 'approve', 'release', 'invoice', 'done']
@@ -164,7 +164,7 @@ def step_negotiate(deal):
     full = [o for o in opts if o.terms['stories'] >= base.stories and o.terms['usage_days'] >= base.usage_days and o.terms['exclusivity_days'] >= base.exclusivity_days]
     db.event(deal['id'], 'terms_compared', {'count': len(opts)})
     result = settle(full, FEE_CREATOR, FEE_BRAND) if full else None
-    if result is None and opts:
+    if result is None and opts and settings.get('company', company['id'])['allow_lighter_terms']:
         result = settle(opts, FEE_CREATOR, FEE_BRAND)
         if result:
             deal['terms_reduced'] = 'The requested terms did not fit both sides, so the closest lighter version was agreed.'
@@ -179,7 +179,11 @@ def step_negotiate(deal):
 
 def step_contract(deal):
     company, creators = _people(deal)
-    text = contract.render(deal, company, creators)
+    cs = settings.get('company', company['id'])
+    if not cs['write_contracts'] and not deal.get('own_contract'):
+        raise Pause('own_contract')
+    text = deal.get('own_contract') or contract.render(deal, company, creators, cs)
+    deal['contract_source'] = 'Supplied by the brand' if deal.get('own_contract') else 'Written by Avuno'
     deal['contract_text'], deal['contract_hash'] = text, contract.contract_hash(text)
     db.act(f"{deal['id']}:contract", deal['id'], 'contract_issued', {'sha256': deal['contract_hash']})
 

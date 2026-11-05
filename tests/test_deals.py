@@ -596,6 +596,118 @@ def test_a_stray_learned_word_does_not_make_a_brand_eligible(world):
     assert one_word['eligible'] is False
 
 
+def test_write_contracts_off_waits_for_the_brands_own_contract(world):
+    from app import settings
+    co = company()
+    settings.update('company', co['id'], {'write_contracts': False})
+    d, end = go([creator()['id']], co)
+    assert end['state'] == 'contract' and end['paused']['kind'] == 'own_contract' and 'contract_issued' not in kinds(d['id'])
+    own = 'Our agreement. All posts must disclose the paid partnership. ' * 5
+    end = orch.set_field(d['id'], 'own_contract', own)
+    assert end['state'] == 'done' and end['contract_text'] == own and end['contract_source'] == 'Supplied by the brand'
+
+
+def test_contract_clause_settings_change_the_text(world):
+    from app import settings
+    co = company()
+    settings.update('company', co['id'], {'clause_kill_fee': False, 'clause_arbitration': False})
+    _, end = go([creator()['id']], co)
+    assert 'kill fee' not in end['contract_text'] and 'arbitration' not in end['contract_text'] and 'courts' in end['contract_text']
+    assert 'ASCI' in end['contract_text']                    # Ad disclosure can't be switched off.
+
+
+def test_contract_includes_optional_clauses_by_default(world):
+    _, end = go([creator()['id']], company())
+    assert 'kill fee' in end['contract_text'] and 'arbitration' in end['contract_text']
+
+
+def test_own_contract_without_disclosure_is_refused(world):
+    from fastapi.testclient import TestClient
+    from app.api import app
+    from app import settings
+    co = company()
+    settings.update('company', co['id'], {'write_contracts': False})
+    d, _ = go([creator()['id']], co)
+    r = TestClient(app).post(f"/api/deals/{d['id']}/own-contract", json={'text': 'A plain agreement with no such clause. ' * 10})
+    assert r.status_code == 400 and 'disclosure' in r.json()['detail']
+
+
+def test_lighter_terms_can_be_refused(world):
+    from app import settings
+    limits = CompanyLimits(ceiling=3000, value_per_reel=3000, value_per_story=100)
+    co = company(ceiling=3000, limits=limits)
+    settings.update('company', co['id'], {'allow_lighter_terms': False})
+    _, end = go([creator(floor=2000)['id']], co, terms=Terms(reels=1, stories=4, usage_days=60))
+    assert end['paused']['kind'] == 'no_overlap' and 'terms_reduced' not in end
+
+
+def test_keeping_other_applications_open_on_choose(world):
+    from app import applications, settings
+    a, b = creator(handle='one'), creator(handle='two')
+    co = company()
+    settings.update('company', co['id'], {'decline_others_on_choose': False})
+    x, y = applications.create(a['id'], co['id'], Terms()), applications.create(b['id'], co['id'], Terms())
+    applications.accept(x['id'])
+    assert db.get('application', y['id'])['status'] == 'sent'
+
+
+def test_offers_below_minimum_fit_are_counted_not_lost(world):
+    from app import applications, settings
+    co = company()
+    applications.create(creator()['id'], co['id'], Terms())
+    settings.update('company', co['id'], {'offers_min_fit': 100})
+    r = applications.for_company(co['id'])
+    assert r['open'] == [] and r['hidden'] == 1
+
+
+def test_auto_deal_pack_and_partly_verified_settings(world):
+    from app import applications, settings
+    c = creator()
+    db.put('seed', 'food', {'at': 'now'})
+    good = {'text': 'food', 'influencer_roles': 3, 'influencer_staff': 3, 'months_since_funding': 5, 'headcount_growth': 0.3, 'recent_news': 5}
+    db.put('company', 'co_p', {'id': 'co_p', 'name': 'Food Partly', 'niche': 'food', 'status': 'partly_verified', 'tier': 'B', 'source': 'company_search', 'signals': good})
+    db.put('company', 'co_v', {'id': 'co_v', 'name': 'Food Verified', 'niche': 'food', 'status': 'verified', 'tier': 'B', 'source': 'company_search', 'signals': good})
+    settings.update('creator', c['id'], {'auto_deal': True, 'auto_pack': 'Starter', 'auto_allow_partly_verified': False})
+    r = applications.auto_apply(c['id'])
+    assert r['sent'] == ['Food Verified'] and applications.for_creator(c['id'])[0]['pack'] == 'Starter'
+    assert 'not verified' in r['held_back'][0]['reason']
+
+
+def test_settings_reject_bad_choices(world):
+    from app import settings
+    with pytest.raises(ValueError):
+        settings.update('app', 'global', {'motion': 'wild'})
+    with pytest.raises(ValueError):
+        settings.update('creator', 'x', {'auto_pack': 'Huge'})
+    assert settings.update('app', 'global', {'motion': 'full'})['motion'] == 'full'
+
+
+def test_core_safety_has_no_off_switch():
+    from app.settings import DEFAULTS
+    every = {k for scope in DEFAULTS.values() for k in scope}
+    assert not every & {'recheck', 'verify', 'block_impersonation', 'ledger', 'ad_disclosure', 'private_limits'}
+
+
+def test_creator_can_change_private_limits_and_they_apply(world):
+    from fastapi.testclient import TestClient
+    from app.api import app
+    c = creator(floor=2000)
+    client = TestClient(app)
+    assert client.post(f"/api/creators/{c['id']}/limits", json={'floor_reel': 9000, 'allow_paid_ads': False, 'max_exclusivity_days': 30, 'blocked_categories': ['betting']}).status_code == 200
+    stored = db.get('creator', c['id'])
+    assert packages.creator_cost(stored, Terms()) == 9000 and packages.within_limits(stored, Terms(paid_ads=True))
+    assert '9000' not in json.dumps(service.public_creator(stored))
+    assert 'floor' not in client.get(f"/api/creators/{c['id']}").text
+
+
+def test_interface_files_are_always_rechecked(world):
+    from fastapi.testclient import TestClient
+    from app.api import app
+    client = TestClient(app)
+    assert client.get('/').headers['cache-control'] == 'no-cache'
+    assert client.get('/static/motion.js').headers['cache-control'] == 'no-cache'
+
+
 def test_minor_is_gated(world):
     d, end = go([creator(is_minor=True)['id']], company())
     assert end['state'] == 'blocked' and 'under 18' in end['final_reason']
