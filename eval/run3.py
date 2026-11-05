@@ -75,7 +75,7 @@ def ig_small():
         for _ in range(I['attempts_per_query']):
             tried += 1
             try:
-                res, _ = cd.post('/web/search/live', {'query': q, 'sources': ['social'], 'nonce': _}, ttl_hours=0)
+                res, _ = cd.post('/web/search/live', {'query': q, 'sources': ['social']}, ttl_hours=0)
             except Unavailable:
                 continue
             found = [x['url'] for x in (res.get('results') or []) if 'instagram.com/reel/' in (x.get('url') or '')]
