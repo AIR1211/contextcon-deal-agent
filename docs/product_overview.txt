@@ -1,0 +1,99 @@
+PRODUCT OVERVIEW - ContextCon Deal Agent (working draft, 6 Nov 2026)
+
+ONE LINE
+An AI agent that replaces an influencer-marketing agency for small brands and small creators: it takes a
+brand's request and carries it through to a signed contract and a paid invoice.
+
+THE SERVICE
+Replaces: talent managers and influencer-marketing agencies.
+Who pays today: creators pay commission; brands pay retainers or campaign margins.
+Who is underserved: small creators and small brands, because small deals are not worth a person's time.
+Position: neutral broker. One published rule for both sides, private limits, disclosed fee on closed deals.
+Not yet decided by the team: neutral broker vs creator-side. This draft assumes neutral broker.
+
+END-TO-END FLOW
+1 Take the brief    2 Verify the brand and sender   3 Match creators      4 Build packages
+5 Pitch             6 Negotiate                     7 Contract            8 Deliver and collect
+Only outcomes of "can't verify", a limit breach or a non-standard clause go to a person.
+
+FEATURES (score out of 5 is the team's judgement of value; status is the plan for tonight)
+AGENT
+5 Build  Messy brief to structured request
+5 Build  Step-by-step state machine with crash resume
+5 Build  Rules decide; the LLM only reads and writes
+5 Build  Mock brand negotiator with hidden limits
+4 Build  Package and pitch generator
+3 Later  Outbound brand discovery
+VERIFICATION
+5 Build  Source and date on every fact
+5 Build  Brand and domain check
+5 Build  Sender check, current and past employer
+5 Build  "Can't verify" status
+4 Build  Parent and alias table with sources
+4 Build  Re-check before signing
+4 Build  Risk tiers, including brands with no website
+3 Build  Ability-to-pay signal
+3 Maybe  Domain age through WHOIS
+CREATORS AND PRICING
+5 Build  Safety gates
+5 Build  Fit score plus separate confidence score
+4 Build  Engagement from public reels
+4 Build  Niche share from captions
+4 Build  Three-tier packages with a creator rate floor
+3 Mock   Audience demographics
+3 Later  Account ownership by bio code
+2 Later  Transcripts through Whisper
+SOFTWARE
+5 Build  Action ledger that blocks double sends
+5 Build  Deal Room live UI
+5 Build  Labelled test set with published results
+4 Build  Crustdata client with cache, retries and fallback
+4 Build  Audit log
+LEGAL (needs a lawyer's review before any real launch)
+5 Build  Contract: usage, exclusivity, kill fee, payment terms
+4 Build  ASCI ad disclosure clause
+3 Mock   Consent for creator data (DPDP Act)
+3 Mock   GST and TDS fields on invoices
+3 Mock   E-signature
+3 Mock   Escrow through a licensed payment partner
+3 Later  Instagram terms review
+HUMAN IN THE LOOP
+5 Build  Escalate only when the answer changes the result
+5 Build  Approve or reject screen with reasons
+4 Build  Creator approves final terms
+4 Build  Unverified party goes to review
+3 Build  Non-standard clause goes to review
+2 Later  Dispute handling
+
+CRUSTDATA FEATURES WE AIM TO USE
+Company Identify        Is the brand real; lookalike domains; one company ID per brand
+Company Enrich          Funding, headcount, news, people; shown as dated evidence
+Person Search           Sender at current or past employer; influencer marketing contacts
+Person Enrich           Career history behind a claim
+Job Search              Influencer roles as a budget signal
+Social Post Search      Brand activity and creator demand, LinkedIn only
+Web Search              Parent companies, acquisitions, past campaigns
+Web Fetch               Public Instagram stats for creators and brands
+Not from Crustdata      YouTube Data API, Whisper, WHOIS, creator-supplied analytics
+Results are in eval/ and research/.
+
+DELIVERABLES (from the handbook, due 7:00 AM)
+[ ] Public repo with commit history from 11 PM on 5 Nov, commits made as we go
+[ ] Working product: a request it has never seen, through to finished work
+[ ] Demo video: one 2-minute link that plays in a private window
+[ ] README: service and who pays; what it does and where it needs a person; future; how to run;
+    how it's built, including where it calls Crustdata and where state lives; what worked and what didn't
+[ ] High-level diagram link, open to anyone
+[ ] Form: team name, one line, theme, repo, video, how it works, diagram
+[ ] Per member: name and email exactly as on YC registration, IITK email, roll number, personal email, GitHub
+[ ] Notes as we build (NOTES.md)
+Finals, if selected: be at the front by 8:40 AM, 2-minute live demo plus 1 minute of questions.
+
+DOCUMENTS THE TEAM KEEPS (short, and each answers a question judges ask)
+docs/product_overview.txt  What it is and what is in scope (this file)
+docs/spec.txt              Requirements, shared models, role split
+docs/decisions.txt         Each major choice, options weighed and why
+docs/demo_script.txt       The 2-minute demo, one page, with fallbacks
+NOTES.md                   What we tried and what happened
+eval/                      Pre-registered tests and results
+README.md                  Written last, from the files above

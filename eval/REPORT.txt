@@ -1,0 +1,56 @@
+CRUSTDATA TEST REPORT - run 1, 6 Nov 2026
+Cases and code were pushed in commit 0b97aab before the run. Results are unedited in results.jsonl.
+Check the log: python eval/run.py --verify
+
+RESULTS
+Test                                     Pass/Total  Note
+Real brand domain resolves               23/24       rarerabbit.in missing; brand sits under thehouseofrare.com
+Fake lookalike domain rejected           12/12
+Messy domain formats normalised          5/5
+Brand name resolves to right company     6/8
+Parent name resolves to the brand        1/4         Parents are separate records
+Identify ranking repeatable              0/1         Ranked list changed across 3 calls
+Founding year matches public knowledge   6/10        Off by 1-2 years; our expected values may be debatable
+Latest headcount within 90 days          10/10       Latest date 2 Nov 2026
+Revenue per employee plausible           9/10        mCaffeine implausible
+Correct company record for Snitch        0/1         Resolves to "Snitch Support"
+Founder found at their company           9/10        Varun Alagh missing at mamaearth.in; parent is a separate record
+Name not found at wrong company          5/6         A different Aman Gupta works at Nike
+Leaver not listed as current             1/4         Different profiles with the same name, see below
+Leaver found under past employer         4/4         Some past matches may also be same-name people
+Misspelt or initial name found           3/5         Lowercase and uppercase pass; "Amman" and "A." fail
+Person Enrich supports the claim         6/6         1 credit each; history matched for leavers too
+India job filter returns India jobs      2/2         2,743 influencer roles
+Social posts within 90 days              3/3         But newest were 49-58 days old
+Web search confirms a known fact         4/5
+Social search returns results each run   0/3         e.g. 0, 9, 0 results for the same query
+Bad input and errors behave predictably  6/6         400, 401, 403; unknown domain not charged
+Rate limit returns 429 with reset header pass        16 of 45 burst calls limited; retry after waiting
+Instagram reels                          NOT RUN     Discovery found 0 reels because social search was empty
+
+KEY FINDING: A NAME MATCH IS NOT IDENTITY
+Searching a name at a company matched a different profile with the same name in 4 cases, including one
+profile presenting itself as an executive at a company its real namesake left.
+Our original test assumed name + company meant the same person. That assumption was wrong, so those rows
+fail. We have not changed them.
+Design change: name + company is a weak signal only, shown as "name match". Stronger evidence is needed
+before a sender counts as verified, such as a work-domain email reply, a profile link checked with Person
+Enrich, and a check for several matching profiles.
+
+ALSO LEARNED
+Person Enrich is cheap (1 credit in these calls) and showed employers that Search alone did not.
+One enriched profile lists both boAt Lifestyle and Imagine Marketing India, a possible source for parent links.
+Company Enrich includes monthly_google_ads_budget, but values look low and the unit is unconfirmed.
+Job Search: influencer roles found at 4 of 5 brands tested, usable as a budget signal.
+
+CORRECTION TO EARLIER NOTES
+research/crustdata_features.txt says headcount ended Sep 2026. This run saw 2 Nov 2026 for the same field.
+The cause is unexplained. Show the date on every fact and don't assume freshness.
+
+LIMITS
+Expected answers come from public knowledge and weren't individually re-verified for this run.
+Sample sizes are small. Raw responses stay private because they include personal data; each log row has
+their SHA-256 hash. The hash chain shows edits made after writing, and the timestamps of pushed commits
+show when results became public. It can't prove that the API returned those bytes.
+/agent/query returned 202 with a job ID; result retrieval not tested.
+Watcher list returned 200 and empty; creating a watch not tested.

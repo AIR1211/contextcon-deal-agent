@@ -1,0 +1,18 @@
+{
+  "_about": "Suite 2, committed before running. Covers gaps found in run 1: brand discovery, contact discovery and Instagram small accounts.",
+  "company_search": [
+    {"query":"Indian skincare and beauty brands","known":["minimalist","plum","mamaearth","mcaffeine","sugar","nykaa","dot & key","forest essentials"]},
+    {"query":"Indian healthy snack food brands","known":["the whole truth","yoga bar","open secret","too yumm","slurrp farm"]},
+    {"query":"Indian fashion streetwear D2C brands","known":["snitch","the souled store","bewakoof","rare rabbit","urbanic"]},
+    {"query":"Indian consumer electronics audio wearable brands","known":["boat","noise","fire-boltt","ptron","mivi"]}
+  ],
+  "company_search_limit": 25,
+  "contact_brands": ["boat-lifestyle.com","nykaa.com","lenskart.com","sugarcosmetics.com","mcaffeine.com","plumgoodness.com","beminimalist.co","thewholetruthfoods.com"],
+  "contact_title_words": ["influencer","creator","marketing","brand","growth","social","content","partnership","community"],
+  "ig_discovery_queries": ["food influencers India reel","home cooking reel India","skincare routine reel India","street food vlog reel","Indian fitness creator reel"],
+  "ig_discovery_attempts": 3,
+  "ig_max_reels": 12,
+  "ig_max_profiles": 12,
+  "pass_rule_instagram": "reel: likes, comments, owner, date parse. profile: followers, following, posts parse and handle matches page title.",
+  "cap_credits": 80
+}
