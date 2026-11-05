@@ -1,0 +1,48 @@
+CRUSTDATA FEATURES - tested 6 Nov 2026 on one team key
+Balance 15,200 -> 15,190.78 (9.22 credits used). Access differs per account, so check each teammate's key.
+Access list: GET /account/endpoints (free). Docs index: docs.crustdata.com/llms.txt
+
+ENABLED AND USEFUL
+/company/identify    Free. Brand name/domain -> company ID. boAt Lifestyle = 628835, confidence 1.0.
+                     Weak spot: "Imagine Marketing" returned 4+ unrelated companies at 1.0.
+                     Rule: a 1.0 score alone is not a match; prefer domain or corroborate.
+/company/enrich      Base 2-4 credits. Only basic_info unless "fields" is sent, e.g.
+                     ["headcount","funding","web_traffic","news"]. All four returned data for boAt.
+/company/search      0.03/result plus extras. India filter works; plain-language query returned
+                     small brands but also noise (a query for snack brands returned "SKIN SNACK",
+                     "D2C Bazaar"). Needs filtering or LLM re-ranking.
+/person/search       0.03/result plus extras. boAt + marketing department returned real titles
+                     (Category Growth & Marketing Lead, Head of Content). Replaces email lookup.
+                     Filter on experience.employment_details.current.company_id and
+                     basic_profile.normalized_title.department. basic_profile.current_title
+                     works as a response field, not a filter.
+                     assessment.authenticity.* filters exist; not tested.
+/person/enrich       1-9 credits. Enabled, not tested.
+/job/search          boAt marketing roles returned with links (10 total). Budget signal.
+/social_post/search  0.5/post. LinkedIn posts seen. Returned boAt's own posts with engagement.
+/web/search/live     1 credit/query. Web results good; found boAt's "Imagine Marketing Ltd" IR page.
+/web/enrich/live     Enabled, not tested. Likely the page fetch route; confirm in docs.
+autocomplete         Free for company and person search.
+/agent/query         Enabled, not tested, purpose not checked.
+
+UNRELIABLE
+/web/search/live with sources:["social"]
+                     1 of 5 queries returned 10 results including Instagram posts with like counts.
+                     The other 4 returned nothing. Bonus evidence only, never a required step.
+
+DISABLED ON THIS KEY (403 on the one called; others listed disabled)
+/person/identify     Email -> person. So no direct email-based sender check.
+/person/contact/enrich, /batch/person/verify, all other batch routes,
+all /live professional network routes, /employee_review/enrich, /dev_platform/enrich
+
+NOT CHECKED
+Watcher: not in the access list and not called. Ask the Crustdata team on the floor.
+
+WHAT THIS MEANS FOR THE BUILD
+Sender check: parse name + email domain -> Company Identify on the domain -> compare with the brand
+  claimed -> Person Search for the name at that company ID. No match = "can't verify", not "fake".
+Hidden conflict: boAt -> Imagine Marketing is supportable. boAt's funding record lists an
+  imaginemarketingindia.com contact email, and web search finds the IR page. Name lookup alone
+  will not make the link, so store a parent/alias table with sources.
+Brand discovery: works for India, with re-ranking.
+Creator metrics: still not from Crustdata. Use YouTube API, creator login or labelled mocks.
