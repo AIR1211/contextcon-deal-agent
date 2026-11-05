@@ -260,7 +260,7 @@ def test_having_no_data_cannot_beat_having_data():
 
 def test_complete_brief_uses_no_llm_call(world, monkeypatch):
     called = []
-    monkeypatch.setattr(llm, '_claude', lambda *a, **k: called.append(a) or None)
+    monkeypatch.setattr(llm, '_ask_model', lambda *a, **k: called.append(a) or None)
     b = llm.parse_brief('From Snackly: budget 30k for 2 reels for our snack brand, 60 day usage. neha@snackly.in')
     assert b['parsed_by'] == 'rules' and not b['missing'] and called == []
 
@@ -270,21 +270,21 @@ def test_llm_is_asked_only_for_missing_fields(world, monkeypatch):
     def fake(prompt, schema=None, max_tokens=0):
         seen['fields'] = schema['required']
         return '{"niche": "food"}' if 'niche' in schema['required'] else None
-    monkeypatch.setattr(llm, '_claude', fake)
+    monkeypatch.setattr(llm, '_ask_model', fake)
     b = llm.parse_brief('From Brandly: budget 30k. neha@brandly.in. We need one creator.')
     assert seen['fields'] == ['niche'] and b['niche'] == 'food' and b['parsed_by'] == 'rules+llm'
 
 
 def test_a_full_deal_uses_no_llm_calls_by_default(world, monkeypatch):
     called = []
-    monkeypatch.setattr(llm, '_claude', lambda *a, **k: called.append(a) or None)
+    monkeypatch.setattr(llm, '_ask_model', lambda *a, **k: called.append(a) or None)
     _, end = go([creator()['id']], company())
     assert end['state'] == 'done' and called == []
 
 
 def test_pitch_rewrite_that_changes_numbers_is_rejected(world, monkeypatch):
     monkeypatch.setattr(llm.config, 'LLM_POLISH', True)
-    monkeypatch.setattr(llm, '_claude', lambda *a, **k: 'Wonderful offer: 99 reels!')
+    monkeypatch.setattr(llm, '_ask_model', lambda *a, **k: 'Wonderful offer: 99 reels!')
     text = llm.pitch_text({'name': 'X', 'niche': 'food'}, [{'handle': 'a'}], {'reels': 1, 'stories': 0, 'usage_days': 30})
     assert '99' not in text and 'AI agent' in text
 

@@ -4,7 +4,6 @@ __pycache__/
 *.db
 *.pdf
 node_modules/
-CLAUDE.md
 eval/raw/
 eval/raw2/
 eval/__pycache__/
