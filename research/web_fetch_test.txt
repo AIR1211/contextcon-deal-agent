@@ -1,0 +1,40 @@
+CRUSTDATA WEB FETCH TEST - 6 Nov 2026
+22 pages, 29 credits. Each page was also requested directly from one laptop as the free baseline.
+Small sample. Instagram numbers have no independent ground truth yet.
+
+OVERALL
+Real pages with usable data: 14/19 (74%). Fake or missing pages: 3/3 returned no invented data.
+Cost: 1 credit per page, including failed and empty pages. Typical time 7-14s, longest 21s.
+
+INSTAGRAM
+Reels: 4/5 gave likes, comments, owner, date and caption.
+Profiles: 5/7 gave followers, following, post count and bio, including 14K and 51K accounts.
+Misses: one success:false, one "Profile isn't available" (may really be gone), one reel with no fields.
+Free baseline: 0 useful fields on all Instagram pages. Web Fetch is the clear winner here.
+Repeat fetch: follower counts matched 5/5, minutes apart.
+Follower counts are rounded (14K, 51K, 1M).
+
+YOUTUBE
+Channels: 2/4 hit a consent wall with no stats. Free baseline got past it.
+Where both returned subscribers: 4/5 agreed. One differed (14.6M vs 324K), probably our regex
+reading another channel's number.
+Channel ID regex also returned inconsistent IDs, so it can't be trusted.
+RSS (free, no key): 15 latest videos with views and dates on 4/4 feeds, but some IDs may be wrong channels.
+Decision: use the official YouTube Data API. Web Fetch adds nothing here.
+
+TRANSCRIPTS
+Caption data appeared on 1/2 video pages. The caption file came back empty directly and failed via Web Fetch.
+Decision: no transcripts from this route. Run Whisper on creator-supplied videos.
+
+ERROR HANDLING
+success:true appeared on consent walls, a 404 and missing profiles.
+Rule: a page counts only if the expected fields parse. Otherwise report "can't verify".
+
+NOT TESTED
+Private accounts. Accuracy against a creator's real analytics. Comment text. Whether the post links on a
+profile page belong to that creator. Whether a one-time bio code can be read. Instagram's terms for this
+use need checking before production.
+
+VERDICT
+Instagram public stats: useful, 1 profile + 3-5 reels is about 5 credits per creator.
+YouTube: not needed. Transcripts and audience demographics: not available from this route.
