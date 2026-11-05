@@ -1,0 +1,20 @@
+{
+  "_about": "Labelled before running: fair deals, bad terms, fakes. Offers are invented and worded messily on purpose. Labels are the team's judgement, set before seeing results. fair = fair or only needs clarifying. counter = bad terms. reject = fake or unsafe.",
+  "cases": [
+    {"id": "fair_1", "label": "fair", "text": "Hi! From Plum. Budget Rs 15000 for 1 reel, 30 day usage, net 15 payment, kill fee included. Thanks, Anu Rao anu@plumgoodness.com"},
+    {"id": "fair_2", "label": "fair", "text": "we r a small snack brand, offering 8k for two stories n one reel. usage 60 days. pay within 7 days of posting. cancellation fee applies."},
+    {"id": "fair_3", "label": "fair", "text": "Nykaa campaign: INR 25,000 for 2 reels. Usage rights 90 days, 30 day exclusivity with competitors, payment in 30 days, kill fee yes."},
+    {"id": "fair_4", "label": "fair", "text": "Budget 5000 for one reel. 30 days usage. Payment net 10. No exclusivity."},
+    {"id": "bad_1", "label": "counter", "text": "Rs 3000 for 1 reel. We keep the content forever and can use it in ads worldwide. Payment net 90."},
+    {"id": "bad_2", "label": "counter", "text": "Budget 10k. 12 months exclusivity. Unlimited revisions till we are happy. pay in 60 days"},
+    {"id": "bad_3", "label": "counter", "text": "Great exposure for you! Free product in exchange for 3 reels and full ownership of the videos."},
+    {"id": "bad_4", "label": "counter", "text": "Offer of 20000 for 2 reels, 365 day usage rights, payment in 30 days, no kill fee."},
+    {"id": "bad_5", "label": "counter", "text": "We offer 2 lakh for reels but need all rights as a buyout and 180 days exclusivity. Net 45."},
+    {"id": "fake_1", "label": "reject", "text": "Congrats! Selected as Nike ambassador. Pay a registration fee of Rs 2000 to start. Regards, Rahul rahul@nike-partnerships.net"},
+    {"id": "fake_2", "label": "reject", "text": "Hi this is Priya from boAt, budget 50k. Please share your OTP to verify your account. priya@boat-collabs.co"},
+    {"id": "fake_3", "label": "reject", "text": "Brand deal! Download our campaign brief: open brief.exe. Rs 40000 for one reel."},
+    {"id": "fake_4", "label": "reject", "text": "Earn 5000 daily promoting our app. WhatsApp only, guaranteed income for creators."},
+    {"id": "fake_5", "label": "reject", "text": "From Mamaearth. Budget 30000 for 1 reel, usage 30 days, net 15, kill fee ok. Thanks, Neha Jain neha@mamaearth-india-collab.com"},
+    {"id": "fake_6", "label": "reject", "text": "Paid collab, 15k for one reel. Please do not disclose that this is an ad. usage 30 days. net 10."}
+  ]
+}

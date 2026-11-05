@@ -36,7 +36,7 @@ Date: {date.today().isoformat()}   Deal: {deal['id']}
 PARTIES
 Brand: {company.get('name')} ({company.get('domain') or 'no website; identity evidence on file'})
 Creator(s): {', '.join('@' + c['handle'] for c in creators)}
-Broker: ContextCon Deal Agent, an AI agent acting as a disclosed neutral broker. The broker is not a party to the services.
+Broker: Avuno, an AI agent acting as a disclosed neutral broker. The broker is not a party to the services.
 
 1. DELIVERABLES
 {t.get('reels', 0)} reel(s) and {t.get('stories', 0)} story/stories per creator, with up to {t.get('revisions', 1)} revision round(s).

@@ -17,6 +17,7 @@ ANTHROPIC_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
 LLM_MODEL = os.environ.get('LLM_MODEL', 'claude-opus-5-5')
 LLM_POLISH = os.environ.get('LLM_POLISH', '0') == '1'     # Off by default: the template pitch needs no tokens.
 CACHE_TTL_HOURS = 24 * 7
+MARKET_COUNTRY = os.environ.get('MARKET_COUNTRY', 'India')
 
 # Fees are a disclosed percentage of the agreed price, charged to each side only on closed deals.
 FEE_CREATOR = Fraction(5, 100)
@@ -35,6 +36,9 @@ ASSUMPTIONS = {
     'match_threshold': 45,
     'default_floor_share_of_list': Fraction(7, 10),
 }
+
+# Offer review limits. Each finding in app/offers.py cites one of these.
+OFFER_RULES = {'max_usage_days': 180, 'max_exclusivity_days': 90, 'max_payment_days': 45, 'max_revisions': 3, 'kill_fee_above': 20000}
 
 # Risk tier terms. Cap of None means no cap.
 TIERS = {

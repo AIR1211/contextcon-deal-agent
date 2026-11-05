@@ -5,7 +5,7 @@ import pytest
 from app import config, service
 from app.crustdata import Crustdata
 
-COMPANIES = {'boat-lifestyle.com': (628835, 'boAt Lifestyle'), 'realbrand.in': (500, 'Real Brand')}
+COMPANIES = {'boat-lifestyle.com': (628835, 'boAt Lifestyle'), 'realbrand.in': (500, 'Real Brand'), 'otherbrand.in': (501, 'Other Brand')}
 EMPLOYED = {('Priya Shah', 500): 'current', ('Ravi Rao', 500): 'past', ('Same Name', 500): 'many', ('Aman Gupta', 628835): 'current'}
 
 
@@ -29,10 +29,17 @@ class World:
     def answer(self, path, body):
         if path == '/company/identify':
             d = (body.get('domains') or [None])[0]
+            if body.get('names') and body['names'][0] == 'Real Brand':
+                d = 'realbrand.in'
             if d in COMPANIES:
                 cid, name = COMPANIES[d]
                 return [{'matches': [{'confidence_score': 1, 'company_data': {'crustdata_company_id': cid, 'basic_info': {'name': name, 'primary_domain': d}}}]}]
             return [{'matches': []}]
+        if path == '/company/search':
+            q = body.get('search', {}).get('query', '')
+            if 'home cooking' in q or 'snack' in q:
+                return {'companies': [{'crustdata_company_id': 900 + i, 'basic_info': {'name': f'Foodco {i}', 'description': 'tasty recipe kitchen food', 'industries': ['food']}} for i in range(5)]}
+            return {'companies': []}
         if path == '/person/search':
             conds = body['filters']['conditions']
             cid = conds[0]['value']
@@ -57,7 +64,7 @@ class World:
         return {}
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def world(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'DB_PATH', str(tmp_path / 'test.db'))
     w = World()

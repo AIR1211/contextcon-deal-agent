@@ -115,7 +115,7 @@ class Crustdata:
         return (m[0].get('person_data') or m[0]) if m else None, ts
 
     def influencer_jobs(self, limit=50, cursor=None):
-        body = {'filters': {'op': 'and', 'conditions': [{'field': 'job_details.title', 'type': '[.]', 'value': 'influencer'}, {'field': 'location.country', 'type': '=', 'value': 'India'}]}, 'fields': ['job_details.title', 'company.basic_info.crustdata_company_id', 'company.basic_info.name', 'company.basic_info.primary_domain'], 'limit': limit}
+        body = {'filters': {'op': 'and', 'conditions': [{'field': 'job_details.title', 'type': '[.]', 'value': 'influencer'}, {'field': 'location.country', 'type': '=', 'value': config.MARKET_COUNTRY}]}, 'fields': ['job_details.title', 'company.basic_info.crustdata_company_id', 'company.basic_info.name', 'company.basic_info.primary_domain'], 'limit': limit}
         if cursor:
             body['cursor'] = cursor
         d, ts = self.post('/job/search', body)
@@ -126,10 +126,15 @@ class Crustdata:
         d, ts = self.post('/job/search', body)
         return _dict(d).get('total_count') or 0, ts
 
-    def small_brands(self, query: str, size='2-10', limit=25):
-        body = {'search': {'query': query, 'mode': 'hybrid'}, 'filters': {'op': 'and', 'conditions': [{'field': 'locations.country', 'type': '=', 'value': 'India'}, {'field': 'basic_info.employee_count_range', 'type': '=', 'value': size}]}, 'fields': ['basic_info.name', 'basic_info.primary_domain', 'basic_info.employee_count_range', 'basic_info.description'], 'limit': limit}
+    def search_companies(self, query: str, size=None, limit=25):
+        conds = [{'field': 'locations.country', 'type': '=', 'value': config.MARKET_COUNTRY}]
+        if size:
+            conds.append({'field': 'basic_info.employee_count_range', 'type': '=', 'value': size})
+        body = {'search': {'query': query, 'mode': 'hybrid'}, 'filters': {'op': 'and', 'conditions': conds}, 'fields': ['basic_info.name', 'basic_info.primary_domain', 'basic_info.employee_count_range', 'basic_info.description', 'basic_info.industries'], 'limit': limit}
         d, ts = self.post('/company/search', body)
         return _dict(d).get('companies') or [], ts
+
+    small_brands = search_companies
 
     def web_search(self, query: str, source='web'):
         d, ts = self.post('/web/search/live', {'query': query, 'sources': [source]})

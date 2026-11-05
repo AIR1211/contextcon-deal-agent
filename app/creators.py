@@ -5,30 +5,6 @@ import statistics
 
 from .crustdata import Crustdata, Unavailable
 
-NICHE_WORDS = {
-    'food': ['food', 'recipe', 'cook', 'kitchen', 'snack', 'eat', 'chef', 'street food', 'beverage', 'dairy', 'nutrition'],
-    'beauty': ['skin', 'beauty', 'makeup', 'cosmetic', 'hair', 'glow', 'serum', 'personal care'],
-    'fashion': ['fashion', 'outfit', 'style', 'apparel', 'clothing', 'wear', 'streetwear', 'textile'],
-    'tech': ['tech', 'gadget', 'review', 'phone', 'audio', 'wearable', 'electronics', 'software'],
-    'fitness': ['fitness', 'gym', 'workout', 'yoga', 'health', 'protein', 'wellness'],
-    'finance': ['finance', 'invest', 'money', 'stock', 'mutual fund', 'banking', 'insurance'],
-    'travel': ['travel', 'trip', 'hotel', 'tourism', 'hospitality'],
-}
-
-
-def niche_hits(niche: str, text: str) -> int:
-    """Words must start at a word boundary, so "eat" does not match "creator" or "great"."""
-    t = (text or '').lower()
-    return sum(bool(re.search(r'\b' + re.escape(w), t)) for w in NICHE_WORDS.get(niche, []))
-
-
-def niche_share(texts: list[str], niche: str) -> float | None:
-    texts = [t for t in texts if t]
-    if not texts or niche not in NICHE_WORDS:
-        return None
-    return sum(niche_hits(niche, t) > 0 for t in texts) / len(texts)
-
-
 def _og(body: str) -> str:
     m = re.search(r'<meta[^>]+property="og:description"[^>]+content="([^"]*)"', body) or re.search(r'<meta[^>]+content="([^"]*)"[^>]+property="og:description"', body)
     return html.unescape(m[1]) if m else ''
@@ -46,6 +22,8 @@ def parse_profile(title: str, body: str, handle: str) -> dict | None:
     if not m or handle.lower() not in title.lower():
         return None
     bio = d.split(' - ', 1)[-1] if ' - ' in d else ''
+    if bio.startswith('See Instagram photos and videos'):      # Instagram's default text, not something the creator wrote.
+        bio = ''
     links = list(dict.fromkeys(re.findall(r'/(?:p|reel)/([\w-]{8,})/', body)))
     return {'followers': _num(m[1]), 'following': _num(m[2]), 'posts': _num(m[3]), 'bio': bio, 'post_ids': links[:12]}
 

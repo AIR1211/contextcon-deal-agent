@@ -1,0 +1,286 @@
+/* Avuno dashboard. No build step: plain JS against the API in docs/spec.txt. */
+const $ = s => document.querySelector(s), $$ = s => [...document.querySelectorAll(s)], view = $('#view'), layer = $('#layer');
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const icon = n => `<svg class="icon"><use href="#i-${n}"/></svg>`;
+const money = n => n == null ? '—' : '₹' + Number(n).toLocaleString('en-IN');
+const count = n => n == null ? '—' : n >= 1e6 ? (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'M' : n >= 1e4 ? Math.round(n / 1e3) + 'K' : Number(n).toLocaleString('en-IN');
+const pct = n => n == null ? 'Unknown' : (n * 100).toFixed(1) + '%';
+const day = s => s ? new Date(s).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
+const clock = s => s ? new Date(s).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '';
+const initial = s => esc((s || '?').replace(/^demo_/, '').charAt(0).toUpperCase());
+
+function toast(msg) { const t = document.createElement('div'); t.className = 'toast'; t.textContent = msg; t.setAttribute('role', 'status'); document.body.append(t); setTimeout(() => t.remove(), 4200); }
+async function api(path, body) {
+  const r = await fetch(path, body === undefined ? {} : { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) { const d = data.detail; throw new Error(typeof d === 'string' ? d : d?.[0]?.msg || `Request failed (${r.status})`); }
+  return data;
+}
+
+const params = new URLSearchParams(location.search);
+const S = { role: params.get('role') || localStorage.role || 'creator', creator: params.has('creator') ? params.get('creator') || null : localStorage.creator || null, company: params.has('company') ? params.get('company') || null : localStorage.company || null, es: null };
+const save = () => { localStorage.role = S.role; S.creator ? localStorage.creator = S.creator : localStorage.removeItem('creator'); S.company ? localStorage.company = S.company : localStorage.removeItem('company'); };
+
+const VERIFY = { verified: ['b-ok', 'Verified'], weak_match: ['b-warn', 'Weak match'], partly_verified: ['b-info', 'Partly verified'], cannot_verify: ['b-none', "Can't verify"], blocked: ['b-err', 'Blocked'], contact_left: ['b-warn', 'Contact left'] };
+const verifyBadge = s => { const [c, l] = VERIFY[s] || ['b-none', s]; return `<span class="badge ${c}"><i></i>${esc(l)}</span>`; };
+function dealBadge(d) {
+  if (d.state === 'done') return '<span class="badge b-done"><i></i>Completed</span>';
+  if (d.state === 'blocked') return '<span class="badge b-err"><i></i>Blocked</span>';
+  if (d.state === 'no_deal') return '<span class="badge b-none"><i></i>No deal</span>';
+  if (d.paused) return '<span class="badge b-warn"><i></i>Needs review</span>';
+  return '<span class="badge b-info"><i></i>In progress</span>';
+}
+const meter = (label, v, cls = '') => `<div class="mline"><div><span>${label}</span><b class="num">${v ?? '—'}</b></div><div class="meter ${cls}" role="img" aria-label="${label} ${v} of 100"><i style="width:${Math.max(0, Math.min(100, v || 0))}%"></i></div></div>`;
+const spinner = t => `<div class="card empty"><span class="spin"></span><p class="muted mt3">${esc(t)}</p></div>`;
+const fieldNames = { followers: 'Followers', engagement_rate: 'Engagement', median_likes: 'Median likes', median_comments: 'Median comments', company: 'Company', group: 'Company group', domain: 'Domain check', name_match: 'Name match', current_employer: 'Current employer', employment: 'Employment', gstin_format: 'GSTIN format', instagram_followers: 'Instagram followers', influencer_roles: 'Influencer roles' };
+function factValue(f) { if (f.field === 'engagement_rate') return pct(f.value); if (typeof f.value === 'number') return count(f.value); if (f.value === true) return 'Valid'; if (f.value === false) return 'Invalid'; return f.value; }
+const factRows = fs => (fs || []).map(f => `<div class="fact"><div><b class="small">${esc(fieldNames[f.field] || f.field)}</b><small>${esc(f.source)}${f.as_of ? ' · ' + esc(day(f.as_of)) : ''}</small></div><div class="row" style="gap:6px;justify-content:flex-end"><span class="small">${esc(factValue(f))}</span>${f.is_mock ? '<span class="tag">Mock</span>' : ''}</div></div>`).join('') || '<p class="faint small">No facts could be checked.</p>';
+
+/* Shell */
+function nav() {
+  const items = S.role === 'creator' ? [['home', 'Home', 'home'], ['brands', 'Brands', 'brands'], ['deals', 'Deals', 'deals'], ['messages', 'Messages', 'mail']] : [['home', 'Home', 'home'], ['creators', 'Creators', 'creators'], ['deals', 'Deals', 'deals'], ['messages', 'Messages', 'mail']];
+  const now = (location.hash.slice(2) || 'home').split('/')[0];
+  $('#nav').innerHTML = items.map(([h, l, i]) => `<a href="#/${h}" class="${now === h ? 'on' : ''}" ${now === h ? 'aria-current="page"' : ''}>${icon(i)}${l}</a>`).join('');
+  $('#r-creator').className = S.role === 'creator' ? 'on' : ''; $('#r-brand').className = S.role === 'brand' ? 'on' : '';
+}
+$('#r-creator').onclick = () => setRole('creator'); $('#r-brand').onclick = () => setRole('brand');
+function setRole(r) { S.role = r; save(); location.hash = '#/home'; route(); }
+async function foot() { try { const s = await api('/api/status'); $('#foot').innerHTML = `<b>Live data</b> from Crustdata${s.credit_balance != null ? `<br>${Math.round(s.credit_balance).toLocaleString('en-IN')} credits left` : ''}<br>Payments, signatures and outbox are mocks.`; } catch { $('#foot').textContent = 'Payments, signatures and outbox are mocks.'; } }
+
+async function route() {
+  if (S.es) { S.es.close(); S.es = null; }
+  save(); nav(); layer.innerHTML = '';
+  const [page, id] = (location.hash.slice(2) || 'home').split('/');
+  try {
+    if (page === 'deals' && id) return await dealRoom(id);
+    const views = { home: S.role === 'creator' ? creatorHome : brandHome, brands, creators, deals, messages };
+    await (views[page] || views.home)();
+  } catch (e) { view.innerHTML = `<div class="card empty"><h2>That didn't load</h2><p class="muted mt2">${esc(e.message)}</p></div>`; }
+}
+addEventListener('hashchange', route);
+
+/* Creator home */
+async function loadCreator() { if (!S.creator) return null; try { return await api(`/api/creators/${S.creator}`); } catch { S.creator = null; save(); return null; } }
+async function creatorHome() {
+  const c = await loadCreator();
+  if (!c) return onboardCreator();
+  const s = c.stats || {}, [ds, ledger] = await Promise.all([api('/api/deals'), api('/api/outbox')]);
+  const mine = ds.filter(d => d.creator_ids.includes(c.id)), earned = ledger.filter(a => a.kind === 'mock_payout' && a.payload.creator === c.id).reduce((n, a) => n + a.payload.amount, 0);
+  const noPosts = !s.reels_read && s.followers != null;
+  view.innerHTML = `<div class="head"><div><h1>Welcome back, @${esc(c.handle)}</h1><p class="muted">Your limits are private. Avuno handles the rest and asks only when your answer changes the result.</p></div><a class="btn b1" href="#/brands">Find brands ${icon('arrow')}</a></div>
+  <div class="grid g4">${[['In progress', mine.filter(d => !['done', 'blocked', 'no_deal'].includes(d.state)).length], ['Completed', mine.filter(d => d.state === 'done').length], ['Earned (mock)', money(earned)], ['Needs your answer', mine.filter(d => d.paused?.question).length]].map(([l, v]) => `<div class="card tile"><div class="l">${l}</div><div class="v num">${v}</div></div>`).join('')}</div>
+  <div class="split mt"><div class="stack"><div class="card"><div class="row" style="align-items:flex-start;gap:var(--s4)"><div class="avatar">${initial(c.handle)}</div><div style="flex:1;min-width:220px"><div class="row between"><div><h2 style="font-size:26px">@${esc(c.handle)}</h2><p class="muted small">${esc(c.niche)}${c.is_mock ? ' · <span class="tag">Mock profile</span>' : ''}</p></div>${c.status === 'read' ? '<span class="badge b-ok"><i></i>Public stats read</span>' : '<span class="badge b-none"><i></i>Can\'t verify</span>'}</div>
+  <div class="stats3 mt"><div><b class="num">${count(s.followers)}</b><span>Followers</span></div><div><b class="num">${pct(s.engagement_rate)}</b><span>Engagement</span></div><div><b class="num">${count(s.median_likes)}</b><span>Median likes</span></div></div></div></div>
+  ${noPosts ? '<div class="ask mt"><div><h4>No public posts to read</h4><p class="small muted">Engagement is unknown, not low. Add analytics or post a reel to raise your confidence score.</p></div></div>' : ''}
+  ${s.engagement_anomalous ? '<div class="ask mt"><div><h4>Your sampled posts look unusually viral</h4><p class="small muted">We don\'t use that engagement in your score. Share analytics for a fairer one.</p></div></div>' : ''}
+  ${c.status !== 'read' ? `<div class="ask bad mt"><div><h4>We couldn't read this profile</h4><p class="small muted">It may be private or unavailable. Nothing has been assumed about you.</p></div></div>` : ''}</div>
+  ${dealList(mine, 'Your deals')}</div>
+  <div class="stack"><div class="card"><h3>Evidence</h3><div class="mt2">${factRows(c.facts)}</div></div>
+  <div class="card"><h3>Got an offer already?</h3><p class="small muted mt2">Paste it, however messy. We'll check who sent it and flag bad terms.</p><textarea id="offer" class="mt3" rows="4" placeholder="Hi! We'd love to work with you..."></textarea><button class="btn b1 sm mt3" id="rev">Review this offer</button><div id="revo"></div></div>
+  <div class="card flat"><div class="row between"><h3>Prove it's you</h3>${c.ownership_verified ? '<span class="badge b-ok"><i></i>Verified</span>' : ''}</div><p class="small muted mt2">Put this code in your Instagram bio, then check. No login needed.</p><p class="mono mt2"><b>${esc(S.code || 'Shown when you register')}</b></p><button class="btn b2 sm mt3" id="own">Check my bio</button><p class="small muted mt2" id="ownr"></p></div>
+  <button class="btn b2" id="reset">Use another handle</button></div></div>`;
+  $('#own').onclick = async () => { $('#ownr').textContent = 'Checking…'; const r = await api(`/api/creators/${c.id}/check-ownership`, {}); $('#ownr').textContent = r.reason; if (r.verified) route(); };
+  $('#reset').onclick = () => { S.creator = null; S.code = null; route(); };
+  $('#rev').onclick = async () => {
+    if (!$('#offer').value.trim()) return;
+    $('#revo').innerHTML = '<p class="small muted mt2"><span class="spin"></span> Checking the terms and the sender…</p>';
+    const r = await api('/api/offers/review', { text: $('#offer').value, creator_id: c.id });
+    const [cls, label] = { reject: ['b-err', 'Do not accept'], counter: ['b-warn', 'Ask for changes'], clarify: ['b-info', 'Needs more detail'], fair: ['b-ok', 'Looks fair'] }[r.verdict];
+    $('#revo').innerHTML = `<div class="mt3"><span class="badge ${cls}"><i></i>${label}</span>${r.findings.map(f => `<div class="fact"><div><b class="small">${esc(f.problem)}</b><small>${esc(f.proposed_change)}</small></div></div>`).join('') || '<p class="small muted mt2">No problems found against our published rules.</p>'}${r.verification ? `<p class="cap faint mt2">Brand: ${esc((VERIFY[r.verification.brand_status] || [, r.verification.brand_status])[1])}. Sender: ${esc((VERIFY[r.verification.sender_status] || [, r.verification.sender_status])[1])}.</p>` : ''}<p class="cap faint mt2">${esc(r.note)}</p></div>`;
+  };
+}
+function onboardCreator() {
+  view.innerHTML = `<div class="onb"><div><p class="cap" style="letter-spacing:.14em;color:var(--ochre-deep)">FOR SMALL CREATORS</p><h1 class="hero-title mt2">Brand deals, handled from first pitch to paid invoice.</h1><p class="muted mt" style="font-size:16px;max-width:520px">No follower minimum. Avuno reads your public stats, finds brands likely to buy, negotiates within your limits, and holds the money before you start work.</p></div>
+  <form class="card" id="f"><h2 style="font-size:26px;margin-bottom:var(--s4)">Start with your handle</h2>
+  <label class="f"><span>Instagram handle</span><input name="handle" required placeholder="@yourhandle" autocomplete="off"></label>
+  <label class="f"><span>Your niche <small>(in your own words)</small></span><input name="niche" required placeholder="e.g. home cooking, thrift fashion, mehendi art"></label>
+  <label class="f"><span>Lowest price per reel <small>(private, never shown to brands)</small></span><input name="floor" type="number" min="0" placeholder="Leave blank for our estimate"></label>
+  <label class="f"><span>Audience in India, % <small>(optional, self-reported)</small></span><input name="aud" type="number" min="0" max="100"></label>
+  <button class="btn b1" style="width:100%">Read my public stats ${icon('arrow')}</button><p class="cap faint mt3" id="st">Takes up to a minute. Public pages only, no login.</p></form></div>`;
+  $('#f').onsubmit = async e => {
+    e.preventDefault(); const f = new FormData(e.target), b = e.target.querySelector('button'); b.disabled = true; $('#st').innerHTML = '<span class="spin"></span> Reading your profile and recent reels…';
+    try { const c = await api('/api/creators', { handle: f.get('handle'), niche: f.get('niche'), limits: { floor_reel: f.get('floor') ? +f.get('floor') : null }, audience_country_pct: f.get('aud') ? +f.get('aud') : null }); S.creator = c.id; S.code = c.ownership_code; S.role = 'creator'; route(); }
+    catch (x) { b.disabled = false; $('#st').textContent = x.message; }
+  };
+}
+
+/* Brands for a creator */
+async function brands() {
+  const c = await loadCreator();
+  if (!c) { location.hash = '#/home'; return; }
+  view.innerHTML = spinner(`Searching live company data for "${c.niche}" and scoring what it finds. The first run can take a minute or two.`);
+  const m = await api(`/api/creators/${c.id}/matches`), sel = new Set();
+  view.innerHTML = `<div class="head"><div><h1>Brands likely to buy</h1><p class="muted">${m.matches.length} above the threshold of ${m.threshold}, for ${esc(c.niche)}. ${esc(m.note)}</p></div></div>
+  <div class="grid g2">${m.matches.map(b => `<article class="card"><div class="row between" style="align-items:flex-start"><div class="row"><div class="avatar sm ink">${initial(b.name)}</div><div><h3>${esc(b.name)}</h3><p class="cap faint">${esc(b.domain || 'No website')}${b.size_range ? ' · ' + esc(b.size_range) + ' staff' : ''}</p></div></div>${verifyBadge(b.status)}</div>
+  <div class="row mt" style="gap:var(--s4)">${meter('Likelihood', b.likelihood)}${meter('Confidence', b.confidence, 'c')}</div><ul class="why">${b.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>${b.decided_by ? `<p class="tie">Ranked above the next brand: ${esc(b.decided_by)}</p>` : ''}
+  <div class="row between mt"><label class="row small" style="gap:6px;cursor:pointer"><input type="checkbox" data-c="${esc(b.company_id)}" style="width:auto"> Compare</label><button class="btn b1 sm" data-p="${esc(b.company_id)}" data-n="${esc(b.name)}">Media packs ${icon('arrow')}</button></div></article>`).join('')}</div>
+  ${m.matches.length ? '' : '<div class="card empty"><h2>No brands above the threshold yet</h2><p class="muted mt2">The brands below show why.</p></div>'}
+  <div id="sel"></div><details class="card flat mt"><summary>${m.rejected.length} brands not suggested, and why</summary>${m.rejected.map(b => `<div class="fact"><b class="small">${esc(b.name)}</b><span class="small muted" style="text-align:right">Likelihood ${b.likelihood}. ${esc(b.reasons.join(' '))}</span></div>`).join('') || '<p class="faint small mt2">None.</p>'}${m.not_assessed ? `<p class="faint small mt2">${m.not_assessed} more matching brands not assessed yet.</p>` : ''}</details>`;
+  $$('[data-p]').forEach(b => b.onclick = () => packs(c, b.dataset.p, b.dataset.n));
+  $$('[data-c]').forEach(x => x.onchange = () => { x.checked ? sel.add(x.dataset.c) : sel.delete(x.dataset.c); $('#sel').innerHTML = sel.size >= 2 ? `<div class="selbar"><span>${sel.size} brands selected</span><button class="btn b3 sm" id="cmp">Compare offers</button></div>` : ''; if (sel.size >= 2) $('#cmp').onclick = () => compare(c, [...sel]); });
+}
+async function compare(c, ids) {
+  const r = await api(`/api/creators/${c.id}/compare-offers`, { company_ids: ids });
+  drawer(`<div class="row between"><h2>Offers, ranked</h2>${closeBtn()}</div><p class="muted small mt2">Published order: pay, safer payment, fewer restrictions, fit, earliest offer, then a fair lot. These are estimates from simulated company limits.</p>
+  <div class="stack mt">${r.offers.map(o => `<div class="card"><div class="row between"><h3>${o.rank}. ${esc(o.name)}</h3><b class="num" style="font-size:18px">${money(o.net)}</b></div><p class="small muted">You net · ${o.upfront_pct}% held upfront · ${o.usage_days} days usage · tier ${esc(o.tier)}</p>${o.decided_by ? `<p class="tie">Beats next: ${esc(o.decided_by)}</p>` : ''}</div>`).join('')}${r.no_offer.map(o => `<div class="card flat"><h3>${esc(o.name || o.company_id)}</h3><p class="small muted">${esc(o.reason)}</p></div>`).join('')}</div>`);
+}
+const closeBtn = () => `<button class="btn b2 sm" data-close aria-label="Close">${icon('x')}</button>`;
+function drawer(html) { layer.innerHTML = `<div class="drawer-bg" data-close></div><aside class="drawer" role="dialog" aria-modal="true">${html}</aside>`; $$('[data-close]').forEach(x => x.onclick = () => { layer.innerHTML = ''; }); }
+
+async function packs(c, companyId, name) {
+  drawer(`<div class="row between"><h2>${esc(name)}</h2>${closeBtn()}</div>${spinner('Building packs…')}`);
+  const p = await api(`/api/creators/${c.id}/packs/${companyId}`);
+  let base = p.packs[1] || p.packs[0], cur = { ...base.terms };
+  const num = (k, l, min, max) => `<label class="f"><span>${l}</span><input type="number" data-t="${k}" min="${min}" max="${max}" value="${cur[k]}"></label>`;
+  const sel = (k, l, opts) => `<label class="f"><span>${l}</span><select data-t="${k}">${opts.map(o => `<option value="${o}" ${+cur[k] === o ? 'selected' : ''}>${o} days</option>`).join('')}</select></label>`;
+  const paint = () => {
+    $('#pk').innerHTML = p.packs.map((x, i) => `<button class="pack ${x === base ? 'on' : ''}" data-i="${i}"><div class="row between"><h4>${esc(x.name)}</h4><b class="num">${money(x.evaluation.list_price)}</b></div><p class="cap faint mt2">${x.terms.reels} reel, ${x.terms.stories} stories, ${x.terms.usage_days}d usage${x.terms.exclusivity_days ? `, ${x.terms.exclusivity_days}d exclusive` : ''}</p><p class="small muted mt2">You net about ${money(x.evaluation.creator_net_estimate)} · ${x.evaluation.close_estimate}% close estimate</p></button>`).join('');
+    $('#tw').innerHTML = `<div class="grid g2">${num('reels', 'Reels', 0, 20)}${num('stories', 'Stories', 0, 50)}${sel('usage_days', 'Brand can reuse for', [...new Set([30, 60, 90, 180, cur.usage_days])].sort((a, b) => a - b))}${sel('exclusivity_days', 'Exclusivity', [...new Set([0, 30, 60, 90, cur.exclusivity_days])].sort((a, b) => a - b))}</div><label class="row small" style="gap:8px;cursor:pointer"><input type="checkbox" data-t="paid_ads" style="width:auto" ${cur.paid_ads ? 'checked' : ''}> Allow paid ads with my content</label>`;
+    $$('[data-i]').forEach(b => b.onclick = () => { base = p.packs[+b.dataset.i]; cur = { ...base.terms }; paint(); $('#dl').innerHTML = ''; });
+    $$('[data-t]').forEach(x => x.onchange = () => { cur[x.dataset.t] = x.type === 'checkbox' ? x.checked : +x.value; check(); });
+  };
+  const check = async () => {
+    const r = await api(`/api/creators/${c.id}/packs/${companyId}/tweak`, { before: base.terms, after: cur });
+    const cls = { improved: 'b-ok', worse: 'b-err', unchanged: 'b-none', blocked: 'b-err' }[r.verdict], sign = n => (n > 0 ? '+' : '') + n, label = { improved: 'Improved', worse: 'Worse', unchanged: 'No change', blocked: 'Outside your limits' }[r.verdict];
+    $('#dl').innerHTML = `<div class="card mt"><div class="row between"><h3>Did this tweak help?</h3><span class="badge ${cls}"><i></i>${label}</span></div>${r.problem ? `<p class="small mt2">${esc(r.problem)}</p>` : ''}
+    <div class="grid g3 mt3"><div><div class="cap faint">List price</div><b class="num">${sign(r.delta.list_price)}</b></div><div><div class="cap faint">Close estimate</div><b class="num">${sign(r.delta.close_estimate)} pts</b></div><div><div class="cap faint">Expected earnings</div><b class="num">${sign(r.delta.expected_earnings)}</b></div></div><p class="cap faint mt3">${esc(r.note)}</p></div>`;
+    $('#go').disabled = r.verdict === 'blocked';
+  };
+  $('.drawer').innerHTML = `<div class="row between"><div><h2>Media packs for ${esc(name)}</h2><p class="small muted">Likelihood ${p.likelihood} · fit ${p.fit} · <span class="tag">Estimates</span></p></div>${closeBtn()}</div><div class="stack mt" id="pk" style="gap:var(--s2)"></div><div class="card mt"><h3 style="margin-bottom:var(--s3)">Tweak it</h3><div id="tw"></div></div><div id="dl"></div>
+  <button class="btn b1 mt" id="go" style="width:100%">Start this deal ${icon('arrow')}</button><p class="cap faint mt2">Simulated company. Nothing is sent to anyone real.</p>`;
+  $$('[data-close]').forEach(x => x.onclick = () => { layer.innerHTML = ''; });
+  paint();
+  $('#go').onclick = () => startDeal([c.id], companyId, cur);
+}
+async function startDeal(creatorIds, companyId, terms, extra = '') {
+  const d = await api(`/api/deals${extra}`, { creator_ids: creatorIds, company_id: companyId, terms, pace_ms: 700 });
+  location.hash = `#/deals/${d.id}`; return d;
+}
+
+/* Brand side */
+async function loadCompany() { if (!S.company) return null; try { return await api(`/api/companies/${S.company}`); } catch { S.company = null; save(); return null; } }
+async function brandHome() {
+  const co = await loadCompany();
+  if (!co) return onboardBrand();
+  const all = await api('/api/deals'), mine = all.filter(d => d.company_id === co.id);
+  view.innerHTML = `<div class="head"><div><h1>${esc(co.name)}</h1><p class="muted">${co.status === 'blocked' ? 'This company cannot use Avuno.' : 'Verification sets your payment terms. Small brands are welcome: small is not the same as fake.'}${co.also_known_as?.length ? ` Also known as ${esc(co.also_known_as.join(', '))}.` : ''}</p></div>${co.status === 'blocked' ? '' : `<a class="btn b1" href="#/creators">Find creators ${icon('arrow')}</a>`}</div>
+  ${co.status === 'blocked' ? `<div class="ask bad"><div><h3>Blocked</h3><p class="small">${esc((co.reasons || []).join(' '))}</p></div></div><div class="mt"></div>` : ''}
+  <div class="split"><div class="stack"><div class="card"><div class="row between"><h3>Verification</h3><div class="row" style="gap:6px">${verifyBadge(co.status)}<span class="badge b-none">Tier ${esc(co.tier)}</span></div></div><ul class="why">${(co.reasons || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul></div>${dealList(mine, 'Your deals')}</div>
+  <div class="stack"><div class="card"><h3>Evidence</h3><div class="mt2">${factRows(co.facts)}</div></div><button class="btn b2" id="reset">Register another company</button></div></div>`;
+  $('#reset').onclick = () => { S.company = null; route(); };
+}
+function onboardBrand() {
+  view.innerHTML = `<div class="onb" style="align-items:start"><div><p class="cap" style="letter-spacing:.14em;color:var(--ochre-deep)">FOR SMALL BRANDS</p><h1 class="hero-title mt2">Creator campaigns without an agency.</h1><p class="muted mt" style="font-size:16px;max-width:520px">No website? That's fine. Verified creators, simple contracts, and your money is only released when you approve the work.</p>
+  <div class="card flat mt5"><h3>Paste a request instead</h3><p class="small muted mt2">However messy. We fill the form, and flag what's missing rather than guessing.</p><textarea id="brief" class="mt3" rows="3" placeholder="need 2 reels for our snack launch, budget 30k, 60 day usage. Thanks, Neha Jain neha@snackly.in"></textarea><button class="btn b3 sm mt3" id="rb" type="button">Read this request</button><p class="small muted mt2" id="rbo"></p></div></div>
+  <form class="card" id="f"><h2 style="font-size:26px;margin-bottom:var(--s4)">Verify your company</h2><label class="f"><span>Company name</span><input name="name" required></label><label class="f"><span>What you sell <small>(in your own words)</small></span><input name="niche" required placeholder="e.g. millet snacks, herbal skincare"></label><label class="f"><span>Website or domain <small>(optional)</small></span><input name="domain" placeholder="yourbrand.in"></label>
+  <div class="grid g2"><label class="f"><span>Your name</span><input name="sender_name"></label><label class="f"><span>Work email</span><input name="sender_email" type="email"></label></div><div class="grid g2"><label class="f"><span>Instagram <small>(if no website)</small></span><input name="instagram" placeholder="@yourbrand"></label><label class="f"><span>GSTIN <small>(lookup is mocked)</small></span><input name="gstin"></label></div><label class="f"><span>Budget, ₹ <small>(private, never shown to creators)</small></span><input name="budget" type="number" min="0" required></label>
+  <button class="btn b1" style="width:100%">Verify ${icon('shield')}</button><p class="cap faint mt3" id="st"></p></form></div>`;
+  $('#rb').onclick = async () => { const b = await api('/api/briefs', { text: $('#brief').value }), f = $('#f').elements; if (b.brand) f.name.value = b.brand; if (b.budget) f.budget.value = b.budget; if (b.niche) f.niche.value = b.niche; if (b.email) { f.sender_email.value = b.email; f.domain.value = /(gmail|yahoo|outlook|hotmail)\./.test(b.email) ? '' : b.email.split('@')[1]; } if (b.sender_name) f.sender_name.value = b.sender_name; $('#rbo').textContent = b.missing.length ? `Still missing: ${b.missing.join(', ')}.` : 'All required fields found.'; };
+  $('#f').onsubmit = async e => { e.preventDefault(); const f = Object.fromEntries([...new FormData(e.target)].filter(([, v]) => v !== '')); f.budget = +f.budget; const b = e.target.querySelector('button'); b.disabled = true; $('#st').innerHTML = '<span class="spin"></span> Checking live sources…'; try { const co = await api('/api/companies', f); S.company = co.id; S.role = 'brand'; route(); } catch (x) { b.disabled = false; $('#st').textContent = x.message; } };
+}
+async function creators() {
+  const co = await loadCompany();
+  if (!co) { location.hash = '#/home'; return; }
+  if (co.status === 'blocked') { view.innerHTML = `<div class="ask bad"><div><h3>Blocked</h3><p class="small">${esc((co.reasons || []).join(' '))}</p></div></div>`; return; }
+  const r = await api(`/api/companies/${co.id}/creators`), sel = new Set(r.suggested_bundle);
+  view.innerHTML = `<div class="head"><div><h1>Creators for ${esc(co.name)}</h1><p class="muted">Ranked on fit and evidence, not follower count. Merit first, then the published tiebreaks.</p></div><button class="btn b2" id="add">${icon('plus')} Add sample creators</button></div>
+  ${r.creators.length ? `<div class="grid g2">${r.creators.map(x => `<article class="card"><div class="row between" style="align-items:flex-start"><div class="row"><div class="avatar sm">${initial(x.handle)}</div><div><h3>@${esc(x.handle)}</h3><p class="cap faint">${esc(x.niche)}${x.is_mock ? ' · <span class="tag">Mock</span>' : ''}</p></div></div><label class="row small" style="gap:6px;cursor:pointer"><input type="checkbox" data-s="${esc(x.creator_id)}" style="width:auto" ${sel.has(x.creator_id) ? 'checked' : ''}> Bundle</label></div>
+  <div class="stats3 mt"><div><b class="num">${count(x.followers)}</b><span>Followers</span></div><div><b class="num">${pct(x.engagement_rate)}</b><span>Engagement</span></div><div><b class="num">${money(x.list_price_estimate)}</b><span>Est. per reel</span></div></div>
+  <div class="row mt" style="gap:var(--s4)">${meter('Fit', x.fit)}${meter('Confidence', x.confidence, 'c')}</div><ul class="why">${x.reasons.map(t => `<li>${esc(t)}</li>`).join('')}</ul>${x.decided_by ? `<p class="tie">Ranked above next: ${esc(x.decided_by)}</p>` : ''}</article>`).join('')}</div><div class="selbar"><span id="sc"></span><button class="btn b3 sm" id="go">Start deal ${icon('arrow')}</button></div>` : `<div class="card empty"><h2>No ${esc(co.niche)} creators yet</h2><p class="muted hero-sub">Add labelled sample creators to try the flow.</p></div>`}
+  ${r.failed_gates.length ? `<details class="card flat mt"><summary>${r.failed_gates.length} creators failed safety checks</summary>${r.failed_gates.map(x => `<div class="fact"><b class="small">@${esc(x.handle)}</b><span class="small muted">${esc(x.gates_failed.join(' '))}</span></div>`).join('')}</details>` : ''}`;
+  $('#add').onclick = async () => { await api('/api/demo/sample-creators', {}); route(); };
+  if (r.creators.length) { const paint = () => { $('#sc').textContent = `${sel.size} selected · budget ${money(r.budget)} stays private`; $('#go').disabled = !sel.size; }; paint(); $$('[data-s]').forEach(x => x.onchange = () => { x.checked ? sel.add(x.dataset.s) : sel.delete(x.dataset.s); paint(); }); $('#go').onclick = () => startDeal([...sel], co.id, { reels: 1, stories: 0, usage_days: 30 }); }
+}
+
+/* Deals */
+const STAGE = { verify: 'Verify', pitch: 'Pitch', await_company: 'Reply', negotiate: 'Negotiate', contract: 'Contract', recheck: 'Re-check', sign: 'Sign', fund: 'Funds held', deliver: 'Deliver', approve: 'Approve', release: 'Release', invoice: 'Invoice', done: 'Paid' };
+const ORDER = Object.keys(STAGE);
+function dealList(list, title) {
+  if (!list.length) return `<div class="card"><h3>${title}</h3><p class="small faint mt2">No deals yet.</p></div>`;
+  return `<div class="card"><h3 style="margin-bottom:var(--s3)">${title}</h3><table class="table"><thead><tr><th>Deal</th><th>Stage</th><th class="r">Brand pays</th><th>Status</th></tr></thead><tbody>${list.slice().reverse().map(d => `<tr class="link" onclick="location.hash='#/deals/${esc(d.id)}'"><td class="mono">${esc(d.id.slice(-6))}</td><td class="small">${esc(STAGE[d.state] || d.state)}</td><td class="r num">${money(d.settlement?.brand_pays)}</td><td>${dealBadge(d)}</td></tr>`).join('')}</tbody></table></div>`;
+}
+async function deals() {
+  const all = await api('/api/deals');
+  const list = S.role === 'creator' && S.creator ? all.filter(d => d.creator_ids.includes(S.creator)) : S.role === 'brand' && S.company ? all.filter(d => d.company_id === S.company) : all;
+  view.innerHTML = `<div class="head"><div><h1>Deals</h1><p class="muted">Every deal runs until it's paid. Open one to see its evidence and full record.</p></div></div>${dealList(list, 'All deals')}${scenarios(all)}`;
+  wireScenarios();
+}
+function scenarios() {
+  return `<div class="card flat mt"><h3>Prove it under pressure</h3><p class="small muted mt2">Each scenario runs a real deal through the real engine, with a simulated failure.</p><div class="row mt3"><button class="btn b2 sm" data-sc="crash">Crash during payment</button><button class="btn b2 sm" data-sc="left">Contact leaves mid-deal</button><button class="btn b2 sm" data-sc="outage">Data source fails</button><span class="small muted" id="sco"></span></div></div>`;
+}
+function wireScenarios() { $$('[data-sc]').forEach(b => b.onclick = () => runScenario(b.dataset.sc)); }
+async function pick() {
+  await api('/api/demo/sample-creators', {});
+  const cs = await api('/api/creators'), c = cs.find(x => x.id === S.creator) || cs.find(x => x.niche === 'food');
+  const cos = await api('/api/companies');
+  let co = cos.find(x => x.id === S.company && x.status !== 'blocked' && x.mode === 'simulated');
+  if (!co) co = await api('/api/companies', { name: 'Demo Snacks (mock)', niche: c.niche, gstin: '09ABCDE1234F1Z5', budget: 20000 });
+  return [c, co];
+}
+async function runScenario(kind) {
+  $('#sco').innerHTML = '<span class="spin"></span> Running…';
+  try {
+    const [c, co] = await pick(), step = kind === 'crash' ? 'release' : 'contract';
+    const d = await api(`/api/deals?crash_after=${step}`, { creator_ids: [c.id], company_id: co.id, terms: { reels: 1, stories: 0, usage_days: 30 }, pace_ms: 300 });
+    sessionStorage.scenario = JSON.stringify({ id: d.id, kind, step });
+    location.hash = `#/deals/${d.id}`;
+  } catch (e) { $('#sco').textContent = e.message; }
+}
+const EVENTS = { deal_started: 'Deal started', step_done: e => `${STAGE[e.data.step] || e.data.step} finished`, message_queued: e => `Message queued to mock outbox: ${e.data.subject}`, simulated_company_replied: 'Simulated company replied', terms_agreed: e => `Terms agreed at ${money(e.data.price)}`, terms_reduced: 'Requested terms did not fit, so lighter terms were agreed', recheck_passed: 'Pre-signing re-check passed', paused: e => e.data.question || 'Waiting', person_decided: e => `A person answered: ${e.data.approve ? 'yes' : 'no'}`, crashed: e => `Process crashed after ${STAGE[e.data.after] || e.data.after} (simulated)`, blocked: e => `Blocked: ${e.data.reason}`, no_deal: e => `No deal: ${e.data.reason}`, tool_failure: 'A data source failed; the deal is saved', delivery: 'Delivery received', approval: 'Delivery approved', company_response: 'Company responded' };
+const KIND = { mock_email: 'Message', contract_issued: 'Contract issued', mock_signature: 'Signature', mock_funds_held: 'Funds held', mock_balance_charged: 'Balance charged', mock_payout: 'Payout', mock_fee: 'Avuno fee', invoice: 'Invoice', exclusivity_reserved: 'Exclusivity reserved' };
+
+async function dealRoom(id) {
+  view.innerHTML = spinner('Opening deal…');
+  let ctx = null, timer;
+  const events = [];
+  const load = async () => {
+    const d = await api(`/api/deals/${id}`);
+    if (!ctx) { const [co, cs] = await Promise.all([api(`/api/companies/${d.company_id}`), Promise.all(d.creator_ids.map(c => api(`/api/creators/${c}`)))]); ctx = { co, cs }; }
+    paintDeal(d, ctx, events);
+    wireDeal(d, id, ctx);
+  };
+  await load();
+  S.es = new EventSource(`/api/deals/${id}/events`);
+  S.es.onmessage = m => { events.push(JSON.parse(m.data)); clearTimeout(timer); timer = setTimeout(() => { if (location.hash.includes(id)) load().catch(() => {}); }, 120); };
+  S.es.onerror = () => { if (S.es) { S.es.close(); S.es = null; } };
+}
+function paintDeal(d, { co, cs }, events) {
+  const at = ORDER.indexOf(d.state), final = ['blocked', 'no_deal'].includes(d.state), s = d.settlement, t = s?.terms;
+  const last = events.filter(e => e.type === 'step_done').pop(); const reached = final ? ORDER.indexOf(last?.data.next || 'verify') : at;
+  const crashed = events.some(e => e.type === 'crashed') && !events.slice(events.findIndex(e => e.type === 'crashed') + 1).some(e => e.type === 'step_done');
+  const open = view.querySelector('details[data-k]')?.open;
+  const pays = (d.actions || []).filter(a => a.kind === 'mock_payout').length;
+  view.innerHTML = `<div class="head"><div><p class="cap faint"><a href="#/deals">Deals</a> / ${esc(d.id)}</p><h1 style="margin-top:4px">${esc(co.name)} × ${cs.map(c => '@' + esc(c.handle)).join(', ')}</h1></div>${crashed ? '<span class="badge b-err"><i></i>Crashed</span>' : dealBadge(d)}</div>
+  <div class="card"><div class="pipe">${ORDER.map((x, i) => `<div class="${final && i === reached ? 'x' : i < reached || d.state === 'done' ? 'd' : i === reached ? 'n' : ''}"><i></i>${STAGE[x]}</div>`).join('')}</div></div>
+  ${crashed ? `<div class="ask bad mt"><div><h3>The process crashed mid-step</h3><p class="small">Actions may already have run, but the step was not saved. Resuming must not repeat any of them.</p></div><button class="btn b1" id="resume">Resume deal</button></div>` : ''}
+  ${d.paused?.question ? `<div class="ask mt"><div><h3>Your answer changes the result</h3><p class="small">${esc(d.paused.question)}</p></div><div class="row"><button class="btn b1 sm" id="yes">Continue</button><button class="btn b2 sm" id="no">Stop deal</button></div></div>` : ''}
+  ${d.paused && !d.paused.question ? `<div class="ask mt"><div><h3>Waiting</h3><p class="small">${esc({ company_response: 'Waiting for the company to respond.', delivery: 'Waiting for the creator to deliver.', approval: 'Waiting for the company to approve delivery.' }[d.paused.kind] || d.paused.kind)}</p></div></div>` : ''}
+  ${d.final_reason ? `<div class="ask bad mt"><div><h3>${d.state === 'blocked' ? 'Blocked, and nothing was sent' : 'No deal'}</h3><p class="small">${esc(d.final_reason)}</p></div></div>` : ''}
+  ${d.state === 'done' ? `<div class="ask mt" style="background:var(--ok-bg);border-color:#C6DACB"><div><h3>Finished: contract signed, money released, invoice issued</h3><p class="small">${pays} payout${pays === 1 ? '' : 's'} made, exactly once${events.some(e => e.type === 'crashed') ? ', even after the crash' : ''}. Payments and signatures are mocks.</p></div></div>` : ''}
+  <div class="split mt"><div class="stack">
+    ${s ? `<div class="card"><p class="small muted">Agreed price</p><div class="hero-num num mt2">${money(s.price)}</div><p class="tie">${esc(s.rule)}</p><div class="mt3"><div class="kv"><span>Brand pays</span><b class="num">${money(s.brand_pays)}</b></div>${Object.entries(s.creator_net).map(([c, n]) => `<div class="kv"><span>@${esc(cs.find(x => x.id === c)?.handle || c)} nets</span><b class="num">${money(n)}</b></div>`).join('')}<div class="kv"><span>Avuno fee (disclosed, 5% each side)</span><b class="num">${money(s.fee_brand + s.fee_creators)}</b></div><div class="kv"><span>Deliverables</span><b>${t.reels} reel, ${t.stories} stories${cs.length > 1 ? ' each' : ''}</b></div><div class="kv"><span>Usage</span><b>${t.usage_days} days${t.paid_ads ? ', paid ads' : ''}</b></div><div class="kv"><span>Exclusivity</span><b>${t.exclusivity_days ? t.exclusivity_days + ' days' : 'None'}</b></div>${d.tier_terms ? `<div class="kv"><span>Held upfront</span><b>${d.tier_terms.upfront_pct}% (${esc(d.tier_terms.label)})</b></div>` : ''}</div>${d.terms_reduced ? `<p class="small mt2">${esc(d.terms_reduced)}</p>` : ''}</div>` : ''}
+    <div class="card"><div class="row between"><h3>Who is ${esc(co.name)}?</h3>${verifyBadge(co.status)}</div><ul class="why">${(co.reasons || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul><div class="mt3">${factRows(co.facts)}</div></div>
+    ${d.recheck ? `<div class="card"><div class="row between"><h3>Re-check before signing</h3>${d.recheck.changed ? '<span class="badge b-warn"><i></i>Changed</span>' : '<span class="badge b-ok"><i></i>No change</span>'}</div><p class="small muted mt2">${esc(d.recheck.detail)} ${esc(day(d.recheck.at))}</p></div>` : ''}
+    ${d.contract_hash ? `<details class="card" data-k ${open ? 'open' : ''}><summary>Contract</summary><p class="cap faint mt2">SHA-256 <span class="mono">${esc(d.contract_hash)}</span></p><pre class="doc">${esc(d.contract_text)}</pre></details>` : ''}
+  </div><div class="stack"><div class="card"><h3 style="margin-bottom:var(--s3)">Activity</h3><ul class="time">${events.length ? events.map(e => { const m = EVENTS[e.type]; return `<li class="${['crashed', 'blocked', 'no_deal'].includes(e.type) ? 'e' : e.type === 'paused' ? 'w' : ''}">${esc(typeof m === 'function' ? m(e) : m || e.type)}<small>${esc(clock(e.ts))}</small></li>`; }).join('') : '<li class="w">Waiting for the first step…</li>'}</ul></div>
+  <div class="card"><div class="row between"><h3>Action ledger</h3><span class="tag">Mock</span></div><p class="cap faint mt2">Each action has a unique key, so it can only happen once.</p><div class="mt2">${(d.actions || []).map(a => `<div class="kv small"><span>${esc(KIND[a.kind] || a.kind)}</span><b class="num">${a.payload.amount != null ? money(a.payload.amount) : a.payload.total != null ? money(a.payload.total) : ''}</b></div>`).join('') || '<p class="faint small">Nothing has happened yet.</p>'}</div></div></div></div>`;
+}
+function wireDeal(d, id) {
+  const answer = async ok => { await api(`/api/deals/${id}/decide`, { approve: ok }); route(); };
+  if ($('#yes')) { $('#yes').onclick = () => answer(true); $('#no').onclick = () => answer(false); }
+  if ($('#resume')) $('#resume').onclick = async () => {
+    const sc = JSON.parse(sessionStorage.scenario || 'null');
+    if (sc?.id === id && sc.kind === 'left') await api(`/api/demo/deals/${id}/contact-left`, {});
+    if (sc?.id === id && sc.kind === 'outage') await api(`/api/demo/deals/${id}/outage`, {});
+    await api(`/api/deals/${id}/resume`, {}); route();
+  };
+}
+
+/* Messages */
+async function messages() {
+  const all = (await api('/api/outbox')).filter(a => a.kind === 'mock_email').reverse();
+  view.innerHTML = `<div class="head"><div><h1>Messages</h1><p class="muted">The agent's outgoing messages. This is a mock outbox: nothing reaches real people.</p></div><span class="tag">Mock outbox</span></div>
+  ${all.length ? `<div class="stack">${all.map(a => `<details class="card"><summary>${esc(a.payload.subject)}</summary><p class="cap faint mt2">To ${esc(a.payload.to)} · ${esc(day(a.ts))} ${esc(clock(a.ts))}</p><p class="small mt2" style="white-space:pre-wrap">${esc(a.payload.body)}</p></details>`).join('')}</div>` : '<div class="card empty"><h2>Nothing sent yet</h2><p class="muted mt2">Messages appear here once a deal starts.</p></div>'}`;
+}
+
+foot(); route();

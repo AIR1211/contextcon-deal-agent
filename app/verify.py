@@ -48,6 +48,23 @@ def _lookalike(domain: str, name: str | None) -> dict | None:
     return None
 
 
+def _claimed_domain(cd: Crustdata, domain: str, name: str | None) -> dict | None:
+    """Live check for brands not in the alias table: the claimed name resolves to a different real domain,
+    and this domain contains that name."""
+    token = re.sub(r'[^a-z0-9]', '', norm(name))
+    if len(token) < 4 or token not in re.sub(r'[^a-z0-9]', '', domain):
+        return None
+    try:
+        m, _ = cd.identify_name(name)
+    except Unavailable:
+        return None
+    for x in m[:3]:
+        real = clean_domain(x['company_data']['basic_info'].get('primary_domain'))
+        if real and real != domain and x.get('confidence_score', 0) >= 0.9 and token in re.sub(r'[^a-z0-9]', '', real):
+            return {'domain': real}
+    return None
+
+
 def verify_brand(cd: Crustdata, name=None, domain=None, instagram=None, gstin=None, bio_code_seen=False) -> dict:
     d = clean_domain(domain)
     subject = name or d or instagram or 'company'
@@ -77,10 +94,10 @@ def verify_brand(cd: Crustdata, name=None, domain=None, instagram=None, gstin=No
             return out
         if m is not None:
             facts.append(Fact(subject=subject, field='domain', value='no match', source='Crustdata Company Identify', as_of=ts, strength=CANT).model_dump())
-            look = _lookalike(d, name)
-            if look:
+            real = _lookalike(d, name) or _claimed_domain(cd, d, name)
+            if real:
                 out['status'] = BLOCKED
-                out['reasons'].append(f"{d} looks like {look['domain']} but is not that company's domain.")
+                out['reasons'].append(f"{d} looks like {real['domain']} but is not that company's domain.")
                 return out
             out['reasons'].append(f'{d} has no company record.')
     elif group_of(name):

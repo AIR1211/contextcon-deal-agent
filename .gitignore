@@ -11,3 +11,5 @@ eval/__pycache__/
 deals*.db*
 .pytest_cache/
 deals_eval.db*
+valuable_insights.md
+deals_eval2.db*

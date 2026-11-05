@@ -77,6 +77,7 @@ class DealIn(BaseModel):
     terms: Terms = Terms()
     non_standard_clause: Optional[str] = None
     simulate_parties: bool = True     # Delivery and approval happen automatically, labelled as mock.
+    pace_ms: int = Field(0, ge=0, le=3000)
 
 
 class CompanyResponse(BaseModel):

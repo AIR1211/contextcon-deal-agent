@@ -1,6 +1,7 @@
 """Runs a deal step by step until it is paid. State is saved after every step, so a crash resumes where it stopped.
 Every outward action goes through the ledger with a stable key, so a re-run can never send or pay twice."""
 import threading
+import time
 from math import ceil
 
 from . import contract, db, llm, packages
@@ -9,6 +10,7 @@ from .crustdata import Unavailable
 from .engine import settle
 from .models import CANT, DealIn, LEFT, VERIFIED, Terms
 from .scoring import gates
+from . import niche as niches
 from . import service
 from .verify import verify_sender
 
@@ -36,7 +38,7 @@ class Stop(Exception):
 
 def start(data: DealIn) -> dict:
     d = {'id': db.new_id('deal'), 'state': 'verify', 'creator_ids': sorted(set(data.creator_ids)), 'company_id': data.company_id, 'terms': data.terms.model_dump(), 'non_standard_clause': data.non_standard_clause,
-         'simulate_parties': data.simulate_parties, 'decisions': {}, 'paused': None, 'reasons': []}
+         'simulate_parties': data.simulate_parties, 'pace_ms': data.pace_ms, 'decisions': {}, 'paused': None, 'reasons': []}
     db.put('deal', d['id'], d)
     db.event(d['id'], 'deal_started', {'creators': d['creator_ids'], 'company': d['company_id']})
     return d
@@ -77,7 +79,7 @@ def _conflict(deal, company, creator):
             continue
         rival = db.get('company', other['company_id'])
         same_group = rival.get('group') and rival['group'] == company.get('group')
-        same_niche = rival.get('niche') and rival['niche'] == company.get('niche')
+        same_niche = niches.related(rival.get('niche'), company.get('niche'))
         if rival['id'] != company['id'] and (same_group or same_niche):
             return f"@{creator['handle']} has {terms['exclusivity_days']} days of exclusivity with {rival['name']}" + (', the same company group.' if same_group else ', a competitor in this niche.')
     return None
@@ -167,7 +169,9 @@ def step_recheck(deal):
     company, creators = _people(deal)
     changed = None
     if deal.get('simulate_contact_left'):
-        changed = f"{company.get('sender_name')} left {company['name']} during this deal (simulated)."
+        changed = f"{company.get('sender_name') or 'The company contact'} left {company['name']} during this deal (simulated)."
+    elif deal.get('simulate_outage'):
+        changed = 'The verification source timed out, so nothing could be re-checked (simulated). Facts stay unconfirmed instead of being assumed.'
     elif company.get('sender_status') == VERIFIED:
         r = verify_sender(service.cd, company.get('sender_name'), company.get('sender_email'), company.get('company_id'), company.get('domain'), company.get('sender_profile_url'), fresh=True)
         if r['status'] == CANT:
@@ -280,6 +284,8 @@ def run(deal_id: str, crash_after: str | None = None) -> dict:
             deal['state'] = ORDER[ORDER.index(state) + 1]
             db.put('deal', deal_id, deal)
             db.event(deal_id, 'step_done', {'step': state, 'next': deal['state']})
+            if deal.get('pace_ms'):      # Only so an audience can watch the steps.
+                time.sleep(min(deal['pace_ms'], 3000) / 1000)
         return deal
     finally:
         lock.release()

@@ -5,14 +5,16 @@ from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import db, llm, orchestrator as orch, service
+from . import config, db, llm, offers, orchestrator as orch, service
 from .crustdata import Unavailable
 from .models import CompanyIn, CompanyLimits, CompanyResponse, CreatorIn, DealIn, Decision, Terms
 
-app = FastAPI(title='ContextCon Deal Agent')
+app = FastAPI(title='Avuno')
 STATIC = Path(__file__).parent / 'static'
+app.mount('/static', StaticFiles(directory=STATIC), name='static')
 
 
 def need(kind: str, id_: str) -> dict:
@@ -120,11 +122,22 @@ def company_creators(cid: str):
 
 
 @app.post('/api/companies/seed')
-def seed(max_jobs: int = 300, per_niche: int = 25):
+def seed(niche: str | None = None, max_jobs: int = 300):
     try:
-        return service.seed_brands(max_jobs, per_niche)
+        return service.seed_brands(niche, max_jobs)
     except Unavailable as e:
         raise HTTPException(503, f"Crustdata unavailable: {e}")
+
+
+class OfferIn(BaseModel):
+    text: str = Field(max_length=8000)
+    creator_id: str | None = None
+
+
+@app.post('/api/offers/review')
+def review_offer(x: OfferIn):
+    c = db.get('creator', x.creator_id) if x.creator_id else None
+    return offers.review(x.text, ((c or {}).get('limits') or {}).get('floor_reel'), service.cd)
 
 
 class BriefIn(BaseModel):
@@ -204,11 +217,28 @@ def resume(did: str):
     return orch.public_deal(orch.run(did))
 
 
+@app.post('/api/demo/sample-creators')
+def sample_creators():
+    """Adds labelled mock creators once, so the company side has someone to rank before real sign-ups."""
+    have = {c['handle'] for c in db.all_docs('creator')}
+    rows = json.loads((config.DATA / 'mock_creators.json').read_text(encoding='utf8'))
+    added = [service.onboard_creator(CreatorIn(**r))['handle'] for r in rows if r['handle'] not in have]
+    return {'added': added}
+
+
 @app.post('/api/demo/deals/{did}/contact-left')
 def simulate_contact_left(did: str):
     """Demo control, labelled as a simulation: set before the pre-signing re-check runs."""
     d = need('deal', did)
     d['simulate_contact_left'] = True
+    db.put('deal', did, d)
+    return {'simulated': True}
+
+
+@app.post('/api/demo/deals/{did}/outage')
+def simulate_outage(did: str):
+    d = need('deal', did)
+    d['simulate_outage'] = True
     db.put('deal', did, d)
     return {'simulated': True}
 

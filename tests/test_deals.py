@@ -186,7 +186,7 @@ def test_company_view_of_creators_hides_floors(world):
 
 def test_two_companies_racing_for_one_creator_first_signer_wins(world):
     cid = creator()['id']
-    a, b = company(), company()
+    a, b = company(), company(domain='otherbrand.in', sender_name=None, sender_email=None)
     excl = Terms(exclusivity_days=30)
     da, db_ = orch.start(DealIn(creator_ids=[cid], company_id=a['id'], terms=excl)), orch.start(DealIn(creator_ids=[cid], company_id=b['id'], terms=excl))
     for x in (da, db_):
@@ -201,7 +201,7 @@ def test_two_companies_racing_for_one_creator_first_signer_wins(world):
 
 def test_compare_offers_ranks_and_explains(world):
     c = creator()
-    richer, safer = company(ceiling=30000, limits=CompanyLimits(ceiling=30000, value_per_reel=20000)), company(ceiling=9000, limits=CompanyLimits(ceiling=9000, value_per_reel=6000))
+    richer, safer = company(ceiling=30000, limits=CompanyLimits(ceiling=30000, value_per_reel=20000)), company(domain='otherbrand.in', sender_name=None, sender_email=None, ceiling=9000, limits=CompanyLimits(ceiling=9000, value_per_reel=6000))
     r = service.compare_offers(c['id'], [safer['id'], richer['id']])
     assert r['offers'][0]['company_id'] == richer['id'] and r['offers'][0]['decided_by'] == 'Pays more'
 
@@ -271,7 +271,7 @@ def test_llm_is_asked_only_for_missing_fields(world, monkeypatch):
         seen['fields'] = schema['required']
         return '{"niche": "food"}' if 'niche' in schema['required'] else None
     monkeypatch.setattr(llm, '_claude', fake)
-    b = llm.parse_brief('From Brandly: budget 30k. neha@brandly.in. Our chips launch needs a creator.')
+    b = llm.parse_brief('From Brandly: budget 30k. neha@brandly.in. We need one creator.')
     assert seen['fields'] == ['niche'] and b['niche'] == 'food' and b['parsed_by'] == 'rules+llm'
 
 
@@ -290,9 +290,89 @@ def test_pitch_rewrite_that_changes_numbers_is_rejected(world, monkeypatch):
 
 
 def test_niche_words_match_whole_word_starts_only():
-    from app.creators import niche_hits
-    assert niche_hits('food', 'a great creator') == 0
-    assert niche_hits('food', 'eating snacks') >= 2
+    from app import niche
+    assert niche.hits('eat', 'a great creator') == 0
+    assert niche.hits('food', 'food recipes') > 0
+
+
+def test_any_free_text_niche_works_without_a_fixed_list(world):
+    from app import niche
+    p = niche.profile('home cooking')
+    assert p['own'] == ['cooking', 'home'] and 'recipe' in p['learned'] and p['source'].startswith('Crustdata')
+    assert niche.hits('home cooking', 'quick recipe ideas') > 0
+    assert niche.related('home cooking', 'snack food')
+    assert not niche.related('mehendi art', 'stock trading')
+
+
+def test_niche_survives_a_search_outage(world):
+    from app import niche
+    world.fail_paths['/company/search'] = lambda r: httpx.Response(500)
+    assert niche.profile('pottery classes')['learned'] == []
+    assert niche.hits('pottery classes', 'my pottery studio') > 0
+
+
+def test_same_company_registered_twice_stays_one_record(world):
+    a = company(name='Real Brand')
+    b = company(name='RealBrand India Pvt Ltd', budget=99000)
+    assert a['id'] == b['id'] and len([x for x in db.all_docs('company') if x['company_id'] == 500]) == 1
+    assert 'RealBrand India Pvt Ltd' in b['also_known_as'] and b['budget'] == 99000
+
+
+def test_lookalike_of_unlisted_brand_is_caught_live(world):
+    co = service.register_company(CompanyIn(name='Real Brand', domain='realbrand-collabs.co', niche='food'))
+    assert co['status'] == BLOCKED and 'realbrand.in' in ' '.join(co['reasons'])
+
+
+def test_impersonation_does_not_merge_into_the_real_record(world):
+    real = service.register_company(CompanyIn(name='Real Brand', domain='realbrand.in', niche='food'))
+    fake = service.register_company(CompanyIn(name='Real Brand', domain='realbrand-collabs.co', niche='food'))
+    assert fake['id'] != real['id'] and db.get('company', real['id'])['status'] == VERIFIED
+
+
+def test_outage_at_recheck_pauses_instead_of_assuming(world):
+    d = orch.start(DealIn(creator_ids=[creator()['id']], company_id=company()['id']))
+    with pytest.raises(orch.SimulatedCrash):
+        orch.run(d['id'], crash_after='contract')
+    stored = db.get('deal', d['id'])
+    stored['simulate_outage'] = True
+    db.put('deal', d['id'], stored)
+    end = orch.run(d['id'])
+    assert end['paused']['kind'] == 'recheck_override' and 'mock_signature' not in kinds(d['id'])
+
+
+@pytest.mark.parametrize('text,verdict,rule', [
+    ('Pay a registration fee of Rs 500 to join our campaign', 'reject', 'scam_signal'),
+    ('Please share your OTP to verify your account', 'reject', 'scam_signal'),
+    ('Rs 3000 for a reel, we keep rights forever, net 90', 'counter', 'usage'),
+    ('Budget 10k, 12 months exclusivity, net 15', 'counter', 'exclusivity'),
+    ('Free product in exchange for 2 reels', 'counter', 'payment'),
+    ('Do not disclose this is an ad. 10k. net 10', 'reject', 'ad_disclosure'),
+    ('Budget 5000 for one reel. 30 days usage. Payment net 10.', 'fair', None),
+])
+def test_offer_review_rules(world, text, verdict, rule):
+    from app.offers import review
+    r = review(text)
+    assert r['verdict'] == verdict
+    assert rule is None or rule in [f['rule'] for f in r['findings']]
+
+
+def test_offer_below_private_floor_is_countered(world):
+    from app.offers import review
+    assert 'price' in [f['rule'] for f in review('Budget 2000 for 1 reel. net 10', floor_reel=5000)['findings']]
+
+
+def test_default_instagram_text_is_not_a_bio():
+    from app.creators import parse_profile
+    body = '<meta property="og:description" content="937 Followers, 970 Following, 0 Posts - See Instagram photos and videos from Someone (@acc)" />'
+    p = parse_profile('Someone (@acc)', body, 'acc')
+    assert p['followers'] == 937 and p['posts'] == 0 and p['bio'] == ''
+
+
+def test_account_with_no_posts_is_unknown_not_low(world):
+    c = {'niche': 'food', 'stats': {'followers': 937, 'reels_read': 0, 'median_likes': None, 'engagement_rate': None, 'strength': 0.7}}
+    f = scoring.fit(c, {'niche': 'food'})
+    assert f['passes'] and any('unknown, not low' in r for r in f['reasons'])
+    assert packages.reel_rate(c['stats']) == packages.A['minimum_reel_price_inr']
 
 
 def test_minor_is_gated(world):
@@ -376,7 +456,7 @@ def test_messy_budgets_parse(text, budget):
 
 def test_messy_brief_marks_missing_fields_instead_of_guessing():
     b = llm.parse_brief('hey!! want 2 reels n a story for our snack launch, 60 day usage, budget 30k. thanks, Neha Jain neha@snackly.in')
-    assert (b['budget'], b['reels'], b['stories'], b['usage_days'], b['niche'], b['email'], b['sender_name']) == (30000, 2, 1, 60, 'food', 'neha@snackly.in', 'Neha Jain')
+    assert (b['budget'], b['reels'], b['stories'], b['usage_days'], b['niche'], b['email'], b['sender_name']) == (30000, 2, 1, 60, 'snack', 'neha@snackly.in', 'Neha Jain')
     assert llm.parse_brief('collab?')['missing'] == ['brand', 'budget', 'niche', 'email']
 
 

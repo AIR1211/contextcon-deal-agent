@@ -1,4 +1,4 @@
-# ContextCon Deal Agent
+# Avuno
 
 An AI agent that replaces an influencer-marketing agency for small creators and small brands. It finds the other side, builds a media pack, negotiates, writes the contract and carries the deal to a paid invoice. A person is asked only when the answer changes the result.
 

@@ -3,7 +3,7 @@ Weights are the team's judgement, not measurements. Unknown factors score 0.5 an
 from datetime import date
 
 from . import config
-from .creators import niche_hits, niche_share
+from . import niche as niches
 
 BRAND_WEIGHTS = {'niche': 25, 'influencer_roles': 25, 'influencer_staff': 15, 'funding': 15, 'growth': 10, 'news': 10}
 FIT_WEIGHTS = {'audience': 35, 'content': 25, 'attention': 20, 'past_sponsored': 10, 'reliability': 10}
@@ -46,7 +46,7 @@ def brand_signals(company: dict | None, roles: int | None, staff: int | None, ni
 
 def likelihood(sig: dict, niche: str, use_jobs: bool = True) -> dict:
     """How likely a brand is to buy creator marketing in this niche. use_jobs=False is for the backtest."""
-    hits = niche_hits(niche, sig.get('text', ''))
+    hits = niches.hits(niche, sig.get('text', ''))
     m = sig.get('months_since_funding')
     g = sig.get('headcount_growth')
     roles, staff, news = sig.get('influencer_roles'), sig.get('influencer_staff'), sig.get('recent_news')
@@ -77,7 +77,7 @@ def gates(creator: dict, company: dict) -> list[str]:
     lim = creator.get('limits') or {}
     if creator.get('is_minor'):
         failed.append('Creator is under 18, so a guardian must be added before contracting.')
-    if company.get('niche') and company['niche'] in (lim.get('blocked_categories') or []):
+    if company.get('niche') and any(niches.related(company['niche'], b) for b in (lim.get('blocked_categories') or [])):
         failed.append(f"Creator does not work with {company['niche']} brands.")
     er = s.get('engagement_rate')
     if er is not None and er < MIN_ENGAGEMENT:
@@ -92,8 +92,8 @@ def fit(creator: dict, company: dict) -> dict:
     er = None if s.get('engagement_anomalous') else s.get('engagement_rate')
     aud = creator.get('audience_country_pct')
     niche = company.get('niche') or creator.get('niche')
-    share = niche_share((s.get('captions') or []) + [s.get('bio') or ''], niche)
-    if niche == creator.get('niche') and share is None:
+    share = niches.share((s.get('captions') or []) + [s.get('bio') or ''], niche)
+    if share is None and niches.related(niche, creator.get('niche')):
         share = 0.6
     f = {
         'audience': (aud / 100, 0.3) if aud is not None else (None, 0),
@@ -109,5 +109,6 @@ def fit(creator: dict, company: dict) -> dict:
     if er is not None: reasons.append(f'Engagement is {er:.1%} of followers, from {s.get("reels_read", 0)} recent reels.')
     if aud is not None: reasons.append(f'{aud}% audience in target country, self-reported.')
     if s.get('engagement_anomalous'): reasons.append('Sampled posts look unusually viral for this account, so engagement is not used. Ask for analytics.')
+    if not s.get('reels_read') and s.get('followers') is not None: reasons.append('No readable public posts, so engagement is unknown, not low.')
     if conf < 50: reasons.append('Low confidence: ask for analytics before relying on this score.')
     return {'score': score, 'confidence': conf, 'gates_failed': failed, 'passes': not failed, 'reasons': reasons, 'source': s.get('source')}

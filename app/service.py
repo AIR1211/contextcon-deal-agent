@@ -5,13 +5,14 @@ import secrets
 from . import db, packages, scoring, tiebreak
 from .config import FEE_BRAND, FEE_CREATOR
 from .engine import settle
-from .creators import niche_hits, read_profile, read_stats, add_engagement
+from . import niche as niches
+from .creators import read_profile, read_stats, add_engagement
 from .crustdata import Crustdata, Unavailable
 from .models import CANT, CompanyIn, CreatorIn, Fact, Terms
 from .verify import group_of, risk_tier, verify_brand, verify_sender
 
 cd = Crustdata()
-SEED_NICHES = {'food': 'Indian snack food brand', 'beauty': 'Indian skincare beauty brand', 'fashion': 'Indian streetwear fashion brand', 'fitness': 'Indian fitness wellness brand'}
+SEARCH_SIZES = ('2-10', '11-50', '51-200')      # Small brands first: the customers agencies skip.
 
 
 def public_creator(c: dict) -> dict:
@@ -54,7 +55,9 @@ def register_company(data: CompanyIn, bio_code_seen: bool = False) -> dict:
     v = verify_brand(cd, data.name, data.domain or data.sender_email, data.instagram, data.gstin, bio_code_seen)
     sender = verify_sender(cd, data.sender_name, data.sender_email, v['company_id'], v['domain'], data.sender_profile_url) if data.sender_name else {'status': CANT, 'reasons': ['No sender named.'], 'facts': []}
     tier = risk_tier(v['status'], sender['status'])
-    c = {'id': db.new_id('co'), 'name': v['name'] or data.name, 'niche': data.niche, 'domain': v['domain'], 'company_id': v['company_id'], 'group': v['group'], 'status': v['status'], 'sender_status': sender['status'],
+    twin = next((x for x in db.all_docs('company') if v['status'] != 'blocked' and ((v['company_id'] and x.get('company_id') == v['company_id']) or (v['domain'] and x.get('domain') == v['domain']))), None)
+    names = sorted({n for n in (twin or {}).get('also_known_as', []) + [(twin or {}).get('name'), data.name] if n and n != (v['name'] or data.name)})
+    c = {'id': twin['id'] if twin else db.new_id('co'), 'also_known_as': names, 'name': v['name'] or data.name, 'niche': data.niche, 'domain': v['domain'], 'company_id': v['company_id'], 'group': v['group'], 'status': v['status'], 'sender_status': sender['status'],
          'sender_name': data.sender_name, 'sender_email': data.sender_email, 'sender_profile_url': data.sender_profile_url, 'tier': tier, 'facts': v['facts'] + sender['facts'], 'reasons': v['reasons'] + sender['reasons'],
          'budget': data.budget, 'gstin': data.gstin, 'instagram': data.instagram, 'mode': data.mode, 'source': 'registered'}
     if data.limits:
@@ -74,49 +77,52 @@ def is_intermediary(name: str | None, industries=None) -> bool:
     return any(x in str(industries or '').lower() for x in ('advertising', 'staffing', 'recruiting', 'marketing services', 'public relations'))
 
 
-def seed_brands(max_jobs=300, per_niche=25) -> dict:
-    """Builds the company database: brands hiring for influencer roles, plus small brands found with a size filter."""
+def seed_brands(niche: str | None = None, max_jobs=300, per_size=15) -> dict:
+    """Builds the company database live: brands hiring for influencer roles, plus companies matching any free-text niche."""
     seen = {b.get('company_id') for b in db.all_docs('company')}
-    added = {'from_jobs': 0, 'small_brands': 0, 'agencies_skipped': 0}
-    jobs, ts = [], db.now()
-    cursor = None
-    while len(jobs) < max_jobs:
-        page, ts, cursor = cd.influencer_jobs(min(100, max_jobs - len(jobs)), cursor)
-        jobs += page
-        if not page or not cursor:
-            break
-    counts = {}
-    for j in jobs:
-        b = ((j.get('company') or {}).get('basic_info') or {})
-        if is_intermediary(b.get('name')):
-            added['agencies_skipped'] += 1
-            continue
-        cid = b.get('crustdata_company_id')
-        if not cid and b.get('primary_domain'):
-            try:
-                m, _ = cd.identify_domain(b['primary_domain'])
-                cid = m[0]['company_data']['crustdata_company_id'] if m else None
-            except Unavailable:
-                cid = None
-        if cid:
-            counts.setdefault(cid, {'b': b, 'n': 0})['n'] += 1
-    for cid, x in counts.items():
-        if cid not in seen:
-            seen.add(cid)
-            d = db.new_id('co')
-            db.put('company', d, {'id': d, 'name': x['b'].get('name'), 'domain': x['b'].get('primary_domain'), 'company_id': cid, 'status': 'verified', 'sender_status': CANT, 'tier': 'B', 'niche': '', 'mode': 'simulated', 'source': 'job_search', 'influencer_roles_seen': x['n'], 'as_of': ts,
-                                   'facts': [Fact(subject=x['b'].get('name') or str(cid), field='influencer_roles', value=x['n'], source='Crustdata Job Search', as_of=ts).model_dump()]})
-            added['from_jobs'] += 1
-    for niche, query in SEED_NICHES.items():
-        rows, ts = cd.small_brands(query, limit=per_niche)
-        for r in rows:
-            cid, b = r.get('crustdata_company_id'), r.get('basic_info') or {}
-            if cid and cid not in seen:
+    added = {'from_jobs': 0, 'from_search': 0, 'agencies_skipped': 0}
+    if not db.get('seed', 'jobs'):
+        jobs, ts, cursor = [], db.now(), None
+        while len(jobs) < max_jobs:
+            page, ts, cursor = cd.influencer_jobs(min(100, max_jobs - len(jobs)), cursor)
+            jobs += page
+            if not page or not cursor:
+                break
+        counts = {}
+        for j in jobs:
+            b = ((j.get('company') or {}).get('basic_info') or {})
+            if is_intermediary(b.get('name')):
+                added['agencies_skipped'] += 1
+                continue
+            cid = b.get('crustdata_company_id')
+            if not cid and b.get('primary_domain'):
+                try:
+                    m, _ = cd.identify_domain(b['primary_domain'])
+                    cid = m[0]['company_data']['crustdata_company_id'] if m else None
+                except Unavailable:
+                    cid = None
+            if cid:
+                counts.setdefault(cid, {'b': b, 'n': 0})['n'] += 1
+        for cid, x in counts.items():
+            if cid not in seen:
                 seen.add(cid)
                 d = db.new_id('co')
-                db.put('company', d, {'id': d, 'name': b.get('name'), 'domain': b.get('primary_domain') or None, 'company_id': cid, 'status': 'verified' if b.get('primary_domain') else 'weak_match', 'sender_status': CANT, 'tier': 'B', 'niche': niche, 'mode': 'simulated', 'source': 'company_search', 'size_range': b.get('employee_count_range'), 'description': b.get('description'), 'as_of': ts,
-                                       'facts': [Fact(subject=b.get('name') or str(cid), field='company', value=b.get('name'), source='Crustdata Company Search', as_of=ts).model_dump()]})
-                added['small_brands'] += 1
+                db.put('company', d, {'id': d, 'name': x['b'].get('name'), 'domain': x['b'].get('primary_domain'), 'company_id': cid, 'status': 'verified', 'sender_status': CANT, 'tier': 'B', 'niche': '', 'mode': 'simulated', 'source': 'job_search', 'influencer_roles_seen': x['n'], 'as_of': ts,
+                                       'facts': [Fact(subject=x['b'].get('name') or str(cid), field='influencer_roles', value=x['n'], source='Crustdata Job Search', as_of=ts).model_dump()]})
+                added['from_jobs'] += 1
+        db.put('seed', 'jobs', {'at': db.now()})
+    if niche:
+        for size in SEARCH_SIZES:
+            rows, ts = cd.search_companies(f'{niche} brand', size=size, limit=per_size)
+            for r in rows:
+                cid, b = r.get('crustdata_company_id'), r.get('basic_info') or {}
+                if cid and cid not in seen and not is_intermediary(b.get('name'), b.get('industries')):
+                    seen.add(cid)
+                    d = db.new_id('co')
+                    db.put('company', d, {'id': d, 'name': b.get('name'), 'domain': b.get('primary_domain') or None, 'company_id': cid, 'status': 'verified' if b.get('primary_domain') else 'weak_match', 'sender_status': CANT, 'tier': 'B', 'niche': niche, 'mode': 'simulated', 'source': 'company_search', 'size_range': b.get('employee_count_range'), 'description': b.get('description'), 'as_of': ts,
+                                           'facts': [Fact(subject=b.get('name') or str(cid), field='company', value=b.get('name'), source=f'Crustdata Company Search for "{niche}"', as_of=ts).model_dump()]})
+                    added['from_search'] += 1
+        db.put('seed', niches.norm(niche), {'at': db.now()})
     return added
 
 
@@ -139,8 +145,13 @@ def matches(creator_id: str, deep_limit: int = 15) -> dict:
     Results are cached, so each brand is paid for once. Rejected brands keep their reasons."""
     creator = db.get('creator', creator_id)
     niche = creator['niche']
+    if not db.get('seed', niches.norm(niche)):
+        try:
+            seed_brands(niche)
+        except Unavailable:
+            pass      # Ranks whatever is already known.
     brands = [b for b in db.all_docs('company') if b['status'] != 'blocked' and not is_intermediary(b.get('name'))]
-    candidates = [b for b in brands if b.get('niche') == niche or niche_hits(niche, ' '.join(str(b.get(k) or '') for k in ('name', 'description')))]
+    candidates = [b for b in brands if niches.related(b.get('niche'), niche) or niches.hits(niche, ' '.join(str(b.get(k) or '') for k in ('name', 'description')))]
     ranked, rejected = [], []
     for b in candidates[:deep_limit]:
         s = _brand_score(b, niche, True)
@@ -176,7 +187,7 @@ def company_creators(company_id: str, base: Terms = Terms()) -> dict:
             for x in d['creator_ids']:
                 done[x] = done.get(x, 0) + 1
     for c in db.all_docs('creator'):
-        if co.get('niche') and c.get('niche') != co['niche']:
+        if co.get('niche') and not niches.related(c.get('niche'), co['niche']):
             continue
         f = scoring.fit(c, co)
         row = {'creator_id': c['id'], 'handle': c['handle'], 'niche': c['niche'], 'followers': (c.get('stats') or {}).get('followers'), 'engagement_rate': (c.get('stats') or {}).get('engagement_rate'), 'fit': f['score'], 'confidence': f['confidence'], 'reasons': f['reasons'], 'list_price_estimate': packages.list_price(c, base), 'is_mock': c.get('is_mock'), 'deals_done': done.get(c['id'], 0)}
