@@ -44,7 +44,7 @@ def brand_signals(company: dict | None, roles: int | None, staff: int | None, ni
     return {'months_since_funding': months, 'headcount_growth': growth, 'recent_news': recent, 'influencer_roles': roles, 'influencer_staff': staff, 'text': text.lower(), 'size_range': b.get('employee_count_range')}
 
 
-def likelihood(sig: dict, niche: str, use_jobs: bool = True) -> dict:
+def likelihood(sig: dict, niche: str, use_jobs: bool = True, open_niche: bool = False) -> dict:
     """How likely a brand is to buy creator marketing in this niche. use_jobs=False is for the backtest."""
     hits = niches.hits(niche, sig.get('text', ''))
     m = sig.get('months_since_funding')
@@ -66,8 +66,9 @@ def likelihood(sig: dict, niche: str, use_jobs: bool = True) -> dict:
     if staff: reasons.append(f'{staff} staff with influencer marketing in their profile.')
     if m is not None and m < 24: reasons.append(f'Raised funding {int(m)} months ago.')
     if g is not None and g > 0.05: reasons.append(f'Headcount grew {round(g * 100)}% in about a year.')
-    if not hits: reasons.append(f'No evidence this business fits {niche}.')
-    return {'score': score, 'confidence': conf, 'reasons': reasons, 'factors': {k: v[0] for k, v in f.items()}, 'eligible': bool(hits) and score >= config.ASSUMPTIONS['match_threshold']}
+    if not hits and open_niche: reasons.append(f'Hires for creator marketing across niches, so fit with {niche} is not proven.')
+    elif not hits: reasons.append(f'No evidence this business fits {niche}.')
+    return {'score': score, 'confidence': conf, 'reasons': reasons, 'factors': {k: v[0] for k, v in f.items()}, 'eligible': (bool(hits) or open_niche) and score >= config.ASSUMPTIONS['match_threshold']}
 
 
 def gates(creator: dict, company: dict) -> list[str]:
@@ -81,7 +82,7 @@ def gates(creator: dict, company: dict) -> list[str]:
         failed.append(f"Creator does not work with {company['niche']} brands.")
     er = s.get('engagement_rate')
     if er is not None and er < MIN_ENGAGEMENT:
-        failed.append(f'Engagement of {er:.2%} is below the {MIN_ENGAGEMENT:.1%} minimum.')
+        failed.append(f'Engagement of {round(er * 100 + 1e-9, 2)}% is below the {MIN_ENGAGEMENT:.1%} minimum.')
     return failed
 
 
@@ -106,7 +107,7 @@ def fit(creator: dict, company: dict) -> dict:
     failed = gates(creator, company)
     reasons = []
     if share: reasons.append(f'{round(share * 100)}% of checked content fits {niche}.')
-    if er is not None: reasons.append(f'Engagement is {er:.1%} of followers, from {s.get("reels_read", 0)} recent reels.')
+    if er is not None: reasons.append(f'Engagement is {round(er * 100 + 1e-9, 1)}% of followers, from {s.get("reels_read", 0)} recent reels.')
     if aud is not None: reasons.append(f'{aud}% audience in target country, self-reported.')
     if s.get('engagement_anomalous'): reasons.append('Sampled posts look unusually viral for this account, so engagement is not used. Ask for analytics.')
     if not s.get('reels_read') and s.get('followers') is not None: reasons.append('No readable public posts, so engagement is unknown, not low.')

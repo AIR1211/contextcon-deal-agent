@@ -25,7 +25,9 @@ def parse_profile(title: str, body: str, handle: str) -> dict | None:
     if bio.startswith('See Instagram photos and videos'):      # Instagram's default text, not something the creator wrote.
         bio = ''
     links = list(dict.fromkeys(re.findall(r'/(?:p|reel)/([\w-]{8,})/', body)))
-    return {'followers': _num(m[1]), 'following': _num(m[2]), 'posts': _num(m[3]), 'bio': bio, 'post_ids': links[:12]}
+    # Pages also link other people's posts that tag this creator. Links under the handle's own path are theirs.
+    own = list(dict.fromkeys(re.findall(rf'/{re.escape(handle)}/(?:p|reel)/([\w-]{{8,}})/', body, re.I)))
+    return {'followers': _num(m[1]), 'following': _num(m[2]), 'posts': _num(m[3]), 'bio': bio, 'post_ids': links[:12], 'own_post_ids': own}
 
 
 def parse_reel(body: str) -> dict | None:
@@ -55,7 +57,8 @@ def read_stats(cd: Crustdata, handle: str, max_reels=8) -> dict:
     if not p:
         raise Unavailable('profile fields could not be read')
     reels = []
-    ids = p['post_ids'][3:] if len(p['post_ids']) >= 6 else p['post_ids']
+    own = p['own_post_ids'] or p['post_ids']
+    ids = own[3:] + own[:3] if len(own) >= 6 else own      # Likely-pinned posts are only read last.
     for pid in ids[:max_reels]:
         if len(reels) >= max_reels:
             break

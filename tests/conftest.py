@@ -9,6 +9,10 @@ COMPANIES = {'boat-lifestyle.com': (628835, 'boAt Lifestyle'), 'realbrand.in': (
 EMPLOYED = {('Priya Shah', 500): 'current', ('Ravi Rao', 500): 'past', ('Same Name', 500): 'many', ('Aman Gupta', 628835): 'current'}
 
 
+# Fields the live API accepted when tested. The real API rejects others with a 400, so the fake does too.
+SEARCH_FIELDS = {'basic_info.name', 'basic_info.primary_domain', 'basic_info.employee_count_range', 'basic_info.description', 'taxonomy.professional_network_industry'}
+
+
 def og(desc, title='Page'):
     return {'title': title, 'content': f'<meta property="og:description" content="{desc}" />', 'success': True}
 
@@ -36,6 +40,8 @@ class World:
                 return [{'matches': [{'confidence_score': 1, 'company_data': {'crustdata_company_id': cid, 'basic_info': {'name': name, 'primary_domain': d}}}]}]
             return [{'matches': []}]
         if path == '/company/search':
+            bad = [f for f in body.get('fields', []) if f not in SEARCH_FIELDS]
+            assert not bad, f'Field not accepted by the real API: {bad}'
             q = body.get('search', {}).get('query', '')
             if 'home cooking' in q or 'snack' in q:
                 return {'companies': [{'crustdata_company_id': 900 + i, 'basic_info': {'name': f'Foodco {i}', 'description': 'tasty recipe kitchen food', 'industries': ['food']}} for i in range(5)]}
@@ -68,5 +74,6 @@ class World:
 def world(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'DB_PATH', str(tmp_path / 'test.db'))
     w = World()
+    monkeypatch.setattr(service, 'BACKGROUND', False)
     monkeypatch.setattr(service, 'cd', Crustdata(keys=['k1'], transport=httpx.MockTransport(w), sleep=lambda s: None))
     return w

@@ -1,7 +1,9 @@
 """Crustdata client: cache, retries, key rotation. Failures raise Unavailable so callers can say "can't verify"."""
 import hashlib
 import json
+import threading
 import time
+from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -19,8 +21,13 @@ class Unavailable(Exception):
     """The source could not answer. Never treat this as a negative finding."""
 
 
+class NotCached(Unavailable):
+    """Raised in cache-only mode when a lookup hasn't been made yet."""
+
+
 class Crustdata:
     def __init__(self, keys=None, transport=None, sleep=time.sleep):
+        self._local = threading.local()
         self.keys = list(keys if keys is not None else config.CRUSTDATA_KEYS)
         self.i = 0
         self.http = httpx.Client(timeout=45, transport=transport)
@@ -64,13 +71,21 @@ class Crustdata:
                 last = f'server error {r.status_code}'
                 self.sleep(min(2 ** attempt, 8))
                 continue
-            raise Unavailable(f'HTTP {r.status_code}')
+            try:
+                detail = str(r.json().get('error', {}).get('message', ''))[:160]
+            except ValueError:
+                detail = ''
+            raise Unavailable(f'HTTP {r.status_code} {detail}'.strip())
         raise Unavailable(last)
 
     def post(self, path: str, body: dict, ttl_hours: float = config.CACHE_TTL_HOURS, fresh: bool = False):
         """Returns (data, as_of). fresh=True skips the cache, for checks right before signing."""
         key = hashlib.sha256((path + json.dumps(body, sort_keys=True)).encode()).hexdigest()
         hit = db.cache_get(key)
+        if getattr(self._local, 'cache_only', False):
+            if hit:
+                return hit
+            raise NotCached('not cached yet')
         if hit and not fresh:
             age = datetime.now(timezone.utc) - datetime.fromisoformat(hit[1])
             if age < timedelta(hours=ttl_hours):
@@ -84,6 +99,15 @@ class Crustdata:
         ts = now()
         db.cache_put(key, data, ts, cr)
         return data, ts
+
+    @contextmanager
+    def cache_only(self):
+        """Inside this block nothing touches the network or the rate limit."""
+        self._local.cache_only = True
+        try:
+            yield
+        finally:
+            self._local.cache_only = False
 
     def identify_domain(self, domain: str):
         d, ts = self.post('/company/identify', {'domains': [domain]})
@@ -130,7 +154,7 @@ class Crustdata:
         conds = [{'field': 'locations.country', 'type': '=', 'value': config.MARKET_COUNTRY}]
         if size:
             conds.append({'field': 'basic_info.employee_count_range', 'type': '=', 'value': size})
-        body = {'search': {'query': query, 'mode': 'hybrid'}, 'filters': {'op': 'and', 'conditions': conds}, 'fields': ['basic_info.name', 'basic_info.primary_domain', 'basic_info.employee_count_range', 'basic_info.description', 'basic_info.industries'], 'limit': limit}
+        body = {'search': {'query': query, 'mode': 'hybrid'}, 'filters': {'op': 'and', 'conditions': conds}, 'fields': ['basic_info.name', 'basic_info.primary_domain', 'basic_info.employee_count_range', 'basic_info.description', 'taxonomy.professional_network_industry'], 'limit': limit}
         d, ts = self.post('/company/search', body)
         return _dict(d).get('companies') or [], ts
 

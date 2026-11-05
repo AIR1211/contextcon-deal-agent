@@ -13,3 +13,4 @@ deals*.db*
 deals_eval.db*
 valuable_insights.md
 deals_eval2.db*
+data/*.local.json

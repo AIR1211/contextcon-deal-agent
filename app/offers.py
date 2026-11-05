@@ -16,7 +16,8 @@ SCAMS = [
 
 def _days(text: str, *words) -> int | None:
     w = '|'.join(words)
-    m = re.search(rf'(\d+)\s*[- ]?\s*(day|week|month|year)s?\b[^.\n]{{0,40}}\b(?:{w})', text) or re.search(rf'\b(?:{w})\b[^.\n]{{0,40}}?(\d+)\s*[- ]?\s*(day|week|month|year)s?', text)
+    # A number only belongs to a word if no comma, full stop or other number sits between them.
+    m = re.search(rf'(\d+)\s*[- ]?\s*(day|week|month|year)s?\b[^.,;\d\n]{{0,25}}\b(?:{w})', text) or re.search(rf'\b(?:{w})\b[^.,;\d\n]{{0,30}}?(\d+)\s*[- ]?\s*(day|week|month|year)s?', text)
     return int(m[1]) * {'day': 1, 'week': 7, 'month': 30, 'year': 365}[m[2]] if m else None
 
 

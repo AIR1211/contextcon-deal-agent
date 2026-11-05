@@ -1,17 +1,21 @@
 """Onboarding and matching for both dashboards. Private limits live in separate documents and never leave through public views."""
 import re
 import secrets
+import threading
 
 from . import db, packages, scoring, tiebreak
 from .config import FEE_BRAND, FEE_CREATOR
 from .engine import settle
 from . import niche as niches
 from .creators import read_profile, read_stats, add_engagement
-from .crustdata import Crustdata, Unavailable
+from .crustdata import Crustdata, NotCached, Unavailable
 from .models import CANT, CompanyIn, CreatorIn, Fact, Terms
 from .verify import group_of, risk_tier, verify_brand, verify_sender
 
 cd = Crustdata()
+BACKGROUND = True
+_running: set[str] = set()
+_guard = threading.Lock()
 SEARCH_SIZES = ('2-10', '11-50', '51-200')      # Small brands first: the customers agencies skip.
 
 
@@ -55,6 +59,8 @@ def register_company(data: CompanyIn, bio_code_seen: bool = False) -> dict:
     v = verify_brand(cd, data.name, data.domain or data.sender_email, data.instagram, data.gstin, bio_code_seen)
     sender = verify_sender(cd, data.sender_name, data.sender_email, v['company_id'], v['domain'], data.sender_profile_url) if data.sender_name else {'status': CANT, 'reasons': ['No sender named.'], 'facts': []}
     tier = risk_tier(v['status'], sender['status'])
+    if v['status'] == 'blocked':      # No point reporting on a sender at a company that failed.
+        sender = {'status': CANT, 'reasons': [], 'facts': []}
     twin = next((x for x in db.all_docs('company') if v['status'] != 'blocked' and ((v['company_id'] and x.get('company_id') == v['company_id']) or (v['domain'] and x.get('domain') == v['domain']))), None)
     names = sorted({n for n in (twin or {}).get('also_known_as', []) + [(twin or {}).get('name'), data.name] if n and n != (v['name'] or data.name)})
     c = {'id': twin['id'] if twin else db.new_id('co'), 'also_known_as': names, 'name': v['name'] or data.name, 'niche': data.niche, 'domain': v['domain'], 'company_id': v['company_id'], 'group': v['group'], 'status': v['status'], 'sender_status': sender['status'],
@@ -74,7 +80,7 @@ def is_intermediary(name: str | None, industries=None) -> bool:
     """An agency hiring for influencer roles is a rival, not a customer. Names are a rough filter, so this can miss some."""
     if name and INTERMEDIARY.search(name):
         return True
-    return any(x in str(industries or '').lower() for x in ('advertising', 'staffing', 'recruiting', 'marketing services', 'public relations'))
+    return any(x in str(industries or '').lower() for x in ('advertising', 'staffing', 'recruiting', 'marketing services', 'public relations', 'media production', 'movies, videos', 'online audio and video media'))
 
 
 def seed_brands(niche: str | None = None, max_jobs=300, per_size=15) -> dict:
@@ -113,36 +119,76 @@ def seed_brands(niche: str | None = None, max_jobs=300, per_size=15) -> dict:
         db.put('seed', 'jobs', {'at': db.now()})
     if niche:
         for size in SEARCH_SIZES:
-            rows, ts = cd.search_companies(f'{niche} brand', size=size, limit=per_size)
+            # Tested against alternatives: this phrasing finds consumer brands, not companies with "brand" in their name.
+            rows, ts = cd.search_companies(f'consumer brand selling {niche} products', size=size, limit=per_size)
             for r in rows:
                 cid, b = r.get('crustdata_company_id'), r.get('basic_info') or {}
-                if cid and cid not in seen and not is_intermediary(b.get('name'), b.get('industries')):
+                if cid and cid not in seen and not is_intermediary(b.get('name'), (r.get('taxonomy') or {}).get('professional_network_industry')):
                     seen.add(cid)
                     d = db.new_id('co')
-                    db.put('company', d, {'id': d, 'name': b.get('name'), 'domain': b.get('primary_domain') or None, 'company_id': cid, 'status': 'verified' if b.get('primary_domain') else 'weak_match', 'sender_status': CANT, 'tier': 'B', 'niche': niche, 'mode': 'simulated', 'source': 'company_search', 'size_range': b.get('employee_count_range'), 'description': b.get('description'), 'as_of': ts,
+                    db.put('company', d, {'id': d, 'name': b.get('name'), 'domain': b.get('primary_domain') or None, 'company_id': cid, 'status': 'verified' if b.get('primary_domain') else 'weak_match', 'sender_status': CANT, 'tier': 'B', 'niche': niche, 'mode': 'simulated', 'source': 'company_search', 'size_range': b.get('employee_count_range'), 'description': b.get('description'), 'industry': (r.get('taxonomy') or {}).get('professional_network_industry'), 'as_of': ts,
                                            'facts': [Fact(subject=b.get('name') or str(cid), field='company', value=b.get('name'), source=f'Crustdata Company Search for "{niche}"', as_of=ts).model_dump()]})
                     added['from_search'] += 1
         db.put('seed', niches.norm(niche), {'at': db.now()})
     return added
 
 
-def _brand_score(company: dict, niche: str, deep: bool) -> dict:
-    """deep=True spends credits on enrichment; results are cached, so each brand is paid for once."""
+def _brand_score(company: dict, niche: str, deep: bool, cached_only: bool = False, open_niche: bool = False) -> dict | None:
+    """deep=True uses enrichment. cached_only returns None if this brand hasn't been looked up yet."""
     enriched, roles, staff = None, company.get('influencer_roles_seen'), None
     if deep and company.get('company_id'):
         try:
-            enriched, _ = cd.enrich_company(company['company_id'])
-            roles = cd.jobs_at(company['company_id'])[0]
-            staff = len(cd.contacts(company['company_id'])[0])
+            if cached_only:
+                with cd.cache_only():
+                    enriched, _ = cd.enrich_company(company['company_id'])
+                    roles = cd.jobs_at(company['company_id'])[0]
+                    staff = len(cd.contacts(company['company_id'])[0])
+            else:
+                enriched, _ = cd.enrich_company(company['company_id'])
+                roles = cd.jobs_at(company['company_id'])[0]
+                staff = len(cd.contacts(company['company_id'])[0])
+        except NotCached:
+            return None
         except Unavailable:
             pass
-    text = ' '.join(str(company.get(k) or '') for k in ('name', 'niche', 'description'))
-    return scoring.likelihood(company.get('signals') or scoring.brand_signals(enriched, roles, staff, text), niche)
+    # A niche only counts as evidence if the company stated it. Being returned by a search proves nothing.
+    fields = ('name', 'description', 'industry', 'niche') if company.get('source') == 'registered' else ('name', 'description', 'industry')
+    text = ' '.join(str(company.get(k) or '') for k in fields)
+    return scoring.likelihood(company.get('signals') or scoring.brand_signals(enriched, roles, staff, text), niche, open_niche=open_niche)
 
 
-def matches(creator_id: str, deep_limit: int = 15) -> dict:
-    """Only brands assessed with the same evidence are compared, so missing data can't beat real data.
-    Results are cached, so each brand is paid for once. Rejected brands keep their reasons."""
+def candidates_for(niche: str) -> list[dict]:
+    brands = [b for b in db.all_docs('company') if b['status'] != 'blocked' and not is_intermediary(b.get('name'))]
+    return [b for b in brands if niches.related(b.get('niche'), niche) or niches.hits(niche, ' '.join(str(b.get(k) or '') for k in ('name', 'description', 'industry')))]
+
+
+def assess(brands: list[dict], niche: str) -> None:
+    """Paced to the enrich rate limit. Results land in the cache, where the next page load finds them."""
+    for b in brands:
+        try:
+            _brand_score(b, niche, True)
+        except Exception:      # One bad record must not stop the rest.
+            continue
+
+
+def _start_assessing(niche: str, brands: list[dict]) -> None:
+    key = niches.norm(niche)
+    with _guard:
+        if key in _running:
+            return
+        _running.add(key)
+
+    def work():
+        try:
+            assess(brands, niche)
+        finally:
+            _running.discard(key)
+    threading.Thread(target=work, daemon=True).start()
+
+
+def matches(creator_id: str, limit: int = 15) -> dict:
+    """Answers at once from the cache, and scores the rest in the background. Only brands with the same evidence are
+    compared, so missing data can't beat real data. The page refreshes as results arrive."""
     creator = db.get('creator', creator_id)
     niche = creator['niche']
     if not db.get('seed', niches.norm(niche)):
@@ -150,15 +196,31 @@ def matches(creator_id: str, deep_limit: int = 15) -> dict:
             seed_brands(niche)
         except Unavailable:
             pass      # Ranks whatever is already known.
-    brands = [b for b in db.all_docs('company') if b['status'] != 'blocked' and not is_intermediary(b.get('name'))]
-    candidates = [b for b in brands if niches.related(b.get('niche'), niche) or niches.hits(niche, ' '.join(str(b.get(k) or '') for k in ('name', 'description')))]
-    ranked, rejected = [], []
-    for b in candidates[:deep_limit]:
-        s = _brand_score(b, niche, True)
+    niches.profile(niche)      # The creator's own niche may need one live lookup. Everything below is cache only.
+    with cd.cache_only():
+        candidates = candidates_for(niche)
+    # Broad niches such as "vlogging" return media peers, not buyers. Brands hiring for creator marketing buy across niches.
+    open_niche = not candidates
+    if open_niche:
+        candidates = [b for b in db.all_docs('company') if b.get('source') == 'job_search' and b['status'] != 'blocked' and not is_intermediary(b.get('name'))]
+    ranked, rejected, pending = [], [], []
+    for b in candidates:
+        with cd.cache_only():
+            s = _brand_score(b, niche, True, cached_only=True, open_niche=open_niche)
+        if s is None:
+            pending.append(b)
+            continue
         row = {'company_id': b['id'], 'name': b['name'], 'domain': b.get('domain'), 'status': b['status'], 'tier': b.get('tier'), 'likelihood': s['score'], 'confidence': s['confidence'], 'reasons': s['reasons'], 'size_range': b.get('size_range'), 'source': b.get('source')}
         (ranked if s['eligible'] else rejected).append(row)
+    # Enough already scored means no background work is needed for this page.
+    todo = pending[:max(limit - len(ranked) - len(rejected), 0)]
+    if todo and BACKGROUND:
+        _start_assessing(niche, todo)
+    elif todo:
+        assess(todo, niche)
+        return matches(creator_id, limit)
     ranked = tiebreak.rank_brands(ranked, creator_id)
-    return {'matches': ranked[:20], 'rejected': rejected[:20], 'threshold': packages.A['match_threshold'], 'not_assessed': max(len(candidates) - deep_limit, 0), 'note': 'Likelihood weights are our judgement until real deals exist.'}
+    return {'matches': ranked[:20], 'rejected': rejected[:20], 'threshold': packages.A['match_threshold'], 'open_niche': open_niche, 'assessing': len(todo), 'not_assessed': max(len(pending) - len(todo), 0), 'note': 'Likelihood weights are our judgement until real deals exist.'}
 
 
 def _scores(creator: dict, company: dict) -> tuple[int, int]:

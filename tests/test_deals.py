@@ -375,6 +375,71 @@ def test_account_with_no_posts_is_unknown_not_low(world):
     assert packages.reel_rate(c['stats']) == packages.A['minimum_reel_price_inr']
 
 
+def test_cache_only_mode_never_touches_the_network(world):
+    from app.crustdata import NotCached
+    with pytest.raises(NotCached), service.cd.cache_only():
+        service.cd.identify_domain('realbrand.in')
+    assert world.calls == []
+    service.cd.identify_domain('realbrand.in')
+    n = len(world.calls)
+    with service.cd.cache_only():
+        assert service.cd.identify_domain('realbrand.in')[0]
+    assert len(world.calls) == n
+
+
+def test_matches_answers_from_cache_and_defers_the_rest(world, monkeypatch):
+    c = creator()
+    db.put('company', 'co_a', {'id': 'co_a', 'name': 'Foodco', 'niche': 'food', 'status': 'verified', 'company_id': 900, 'tier': 'B'})
+    db.put('seed', 'food', {'at': 'now'})
+    started = []
+    monkeypatch.setattr(service, 'BACKGROUND', True)
+    monkeypatch.setattr(service, '_start_assessing', lambda n, b: started.append(len(b)))
+    before = len(world.calls)
+    r = service.matches(c['id'])
+    assert r['assessing'] == 1 and started == [1] and r['matches'] == []
+    assert not [p for p in world.calls[before:] if p in ('/company/enrich', '/job/search')]
+    service.assess([db.get('company', 'co_a')], 'food')
+    r = service.matches(c['id'])
+    assert r['assessing'] == 0 and len(r['matches'] + r['rejected']) == 1
+
+
+@pytest.mark.parametrize('text,field,days', [
+    ('Usage rights 90 days, 30 day exclusivity with competitors, payment in 30 days', 'payment_days', 30),
+    ('Usage rights 90 days, 30 day exclusivity with competitors, payment in 30 days', 'usage_days', 90),
+    ('Usage rights 90 days, 30 day exclusivity with competitors, payment in 30 days', 'exclusivity_days', 30),
+    ('12 months exclusivity. net 45', 'exclusivity_days', 360),
+    ('30 day usage. pay within 7 days', 'payment_days', 7),
+])
+def test_each_duration_is_read_from_its_own_phrase(text, field, days):
+    from app.offers import extract
+    assert extract(text)[field] == days
+
+
+def test_only_the_creators_own_posts_are_read(world):
+    from app.creators import parse_profile
+    body = '<meta property="og:description" content="3K Followers, 400 Following, 800 Posts - bio" /> /reel/OTHERPOST01/ /acc/reel/MINEPOST001/ /acc/reel/MINEPOST002/'
+    p = parse_profile('Name (@acc)', body, 'acc')
+    assert p['own_post_ids'] == ['MINEPOST001', 'MINEPOST002'] and 'OTHERPOST01' in p['post_ids']
+
+
+def test_broad_niche_falls_back_to_brands_hiring_for_creators(world):
+    c = service.onboard_creator(CreatorIn(handle='v', niche='vlogging', mock_stats=MOCK))
+    db.put('seed', 'vlogging', {'at': 'now'})
+    db.put('company', 'co_j', {'id': 'co_j', 'name': 'Wellness Co', 'niche': '', 'status': 'verified', 'company_id': None, 'tier': 'B', 'source': 'job_search', 'signals': {'text': '', 'influencer_roles': 3, 'influencer_staff': 3, 'months_since_funding': 5, 'headcount_growth': 0.3, 'recent_news': 5}})
+    r = service.matches(c['id'])
+    assert r['open_niche'] is True and [b['name'] for b in r['matches']] == ['Wellness Co']
+    assert 'not proven' in ' '.join(r['matches'][0]['reasons'])
+
+
+def test_search_result_alone_is_not_evidence_of_niche_fit(world):
+    c = creator()
+    db.put('seed', 'food', {'at': 'now'})
+    db.put('company', 'co_x', {'id': 'co_x', 'name': 'Allure Ink', 'description': 'tattoo studio', 'niche': 'food', 'status': 'verified', 'company_id': None, 'tier': 'B', 'source': 'company_search'})
+    db.put('company', 'co_y', {'id': 'co_y', 'name': 'Tasty Giants', 'industry': 'Food and Beverage Services', 'niche': 'food', 'status': 'verified', 'company_id': None, 'tier': 'B', 'source': 'company_search'})
+    r = service.matches(c['id'])
+    assert 'Allure Ink' in [b['name'] for b in r['rejected']] and 'Tasty Giants' not in [b['name'] for b in r['rejected']]
+
+
 def test_minor_is_gated(world):
     d, end = go([creator(is_minor=True)['id']], company())
     assert end['state'] == 'blocked' and 'under 18' in end['final_reason']

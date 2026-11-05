@@ -36,3 +36,11 @@ Company choosing a creator: fit -> evidence -> price -> engagement -> fewer deal
 Merit comes first; then the choice spreads income to smaller creators, which is the product's purpose. Fair lot is a
 hash, not database order, so nobody wins an exact tie by signing up first.
 Equal-surplus options: fewer restrictions on the creator. Race for exclusivity: first to sign, reserved atomically.
+
+D11 Niches are free text, with no fixed list. Vocabulary is learned from Crustdata results for the phrase itself.
+D12 Rate limits: pages answer from the cache and score the rest in the background, so nobody waits on a limit.
+app/prewarm.py pre-loads known niches (data/known_niches.json). Rotating teammates' keys speeds it up.
+D13 Broad niches: "vlogging" search returns media peers, not buyers, so those are filtered out. If nothing remains, the
+creator sees brands hiring for creator marketing across niches, labelled "fit not proven".
+D14 Brand discovery query. Compared 4 phrasings live on 3 niches. "consumer brand selling X products" found real consumer
+brands; "X brand" matched names containing the word brand. A niche match now needs the company's own text.

@@ -77,10 +77,10 @@ async function creatorHome() {
   ${dealList(mine, 'Your deals')}</div>
   <div class="stack"><div class="card"><h3>Evidence</h3><div class="mt2">${factRows(c.facts)}</div></div>
   <div class="card"><h3>Got an offer already?</h3><p class="small muted mt2">Paste it, however messy. We'll check who sent it and flag bad terms.</p><textarea id="offer" class="mt3" rows="4" placeholder="Hi! We'd love to work with you..."></textarea><button class="btn b1 sm mt3" id="rev">Review this offer</button><div id="revo"></div></div>
-  <div class="card flat"><div class="row between"><h3>Prove it's you</h3>${c.ownership_verified ? '<span class="badge b-ok"><i></i>Verified</span>' : ''}</div><p class="small muted mt2">Put this code in your Instagram bio, then check. No login needed.</p><p class="mono mt2"><b>${esc(S.code || 'Shown when you register')}</b></p><button class="btn b2 sm mt3" id="own">Check my bio</button><p class="small muted mt2" id="ownr"></p></div>
+  <div class="card flat"><div class="row between"><h3>Prove it's you</h3>${c.ownership_verified ? '<span class="badge b-ok"><i></i>Verified</span>' : ''}</div><p class="small muted mt2">Put this code in your Instagram bio, then check. No login needed.</p><p class="mono mt2"><b>${esc(localStorage['code:' + c.id] || 'Shown when you register on this device')}</b></p><button class="btn b2 sm mt3" id="own">Check my bio</button><p class="small muted mt2" id="ownr"></p></div>
   <button class="btn b2" id="reset">Use another handle</button></div></div>`;
   $('#own').onclick = async () => { $('#ownr').textContent = 'Checking…'; const r = await api(`/api/creators/${c.id}/check-ownership`, {}); $('#ownr').textContent = r.reason; if (r.verified) route(); };
-  $('#reset').onclick = () => { S.creator = null; S.code = null; route(); };
+  $('#reset').onclick = () => { S.creator = null; route(); };
   $('#rev').onclick = async () => {
     if (!$('#offer').value.trim()) return;
     $('#revo').innerHTML = '<p class="small muted mt2"><span class="spin"></span> Checking the terms and the sender…</p>';
@@ -99,24 +99,25 @@ function onboardCreator() {
   <button class="btn b1" style="width:100%">Read my public stats ${icon('arrow')}</button><p class="cap faint mt3" id="st">Takes up to a minute. Public pages only, no login.</p></form></div>`;
   $('#f').onsubmit = async e => {
     e.preventDefault(); const f = new FormData(e.target), b = e.target.querySelector('button'); b.disabled = true; $('#st').innerHTML = '<span class="spin"></span> Reading your profile and recent reels…';
-    try { const c = await api('/api/creators', { handle: f.get('handle'), niche: f.get('niche'), limits: { floor_reel: f.get('floor') ? +f.get('floor') : null }, audience_country_pct: f.get('aud') ? +f.get('aud') : null }); S.creator = c.id; S.code = c.ownership_code; S.role = 'creator'; route(); }
+    try { const c = await api('/api/creators', { handle: f.get('handle'), niche: f.get('niche'), limits: { floor_reel: f.get('floor') ? +f.get('floor') : null }, audience_country_pct: f.get('aud') ? +f.get('aud') : null }); S.creator = c.id; localStorage['code:' + c.id] = c.ownership_code; S.role = 'creator'; route(); }
     catch (x) { b.disabled = false; $('#st').textContent = x.message; }
   };
 }
 
 /* Brands for a creator */
-async function brands() {
+async function brands(quiet) {
   const c = await loadCreator();
   if (!c) { location.hash = '#/home'; return; }
-  view.innerHTML = spinner(`Searching live company data for "${c.niche}" and scoring what it finds. The first run can take a minute or two.`);
+  if (quiet !== true) view.innerHTML = spinner(`Searching for "${c.niche}" brands…`);
   const m = await api(`/api/creators/${c.id}/matches`), sel = new Set();
-  view.innerHTML = `<div class="head"><div><h1>Brands likely to buy</h1><p class="muted">${m.matches.length} above the threshold of ${m.threshold}, for ${esc(c.niche)}. ${esc(m.note)}</p></div></div>
+  view.innerHTML = `<div class="head"><div><h1>Brands likely to buy</h1><p class="muted">${m.matches.length} above the threshold of ${m.threshold}, for ${esc(c.niche)}. ${m.open_niche ? `"${esc(c.niche)}" names no product category, so these are brands hiring for creator marketing across niches. ` : ''}${esc(m.note)}</p></div>${m.assessing ? `<span class="badge b-info"><span class="spin" style="width:10px;height:10px"></span>Scoring ${m.assessing} more live</span>` : ''}</div>
   <div class="grid g2">${m.matches.map(b => `<article class="card"><div class="row between" style="align-items:flex-start"><div class="row"><div class="avatar sm ink">${initial(b.name)}</div><div><h3>${esc(b.name)}</h3><p class="cap faint">${esc(b.domain || 'No website')}${b.size_range ? ' · ' + esc(b.size_range) + ' staff' : ''}</p></div></div>${verifyBadge(b.status)}</div>
   <div class="row mt" style="gap:var(--s4)">${meter('Likelihood', b.likelihood)}${meter('Confidence', b.confidence, 'c')}</div><ul class="why">${b.reasons.map(r => `<li>${esc(r)}</li>`).join('')}</ul>${b.decided_by ? `<p class="tie">Ranked above the next brand: ${esc(b.decided_by)}</p>` : ''}
   <div class="row between mt"><label class="row small" style="gap:6px;cursor:pointer"><input type="checkbox" data-c="${esc(b.company_id)}" style="width:auto"> Compare</label><button class="btn b1 sm" data-p="${esc(b.company_id)}" data-n="${esc(b.name)}">Media packs ${icon('arrow')}</button></div></article>`).join('')}</div>
-  ${m.matches.length ? '' : '<div class="card empty"><h2>No brands above the threshold yet</h2><p class="muted mt2">The brands below show why.</p></div>'}
-  <div id="sel"></div><details class="card flat mt"><summary>${m.rejected.length} brands not suggested, and why</summary>${m.rejected.map(b => `<div class="fact"><b class="small">${esc(b.name)}</b><span class="small muted" style="text-align:right">Likelihood ${b.likelihood}. ${esc(b.reasons.join(' '))}</span></div>`).join('') || '<p class="faint small mt2">None.</p>'}${m.not_assessed ? `<p class="faint small mt2">${m.not_assessed} more matching brands not assessed yet.</p>` : ''}</details>`;
+  ${m.matches.length ? '' : m.assessing ? '<div class="card empty"><span class="spin"></span><h2 class="mt3">Scoring brands now</h2><p class="muted mt2">They appear here as soon as each one is checked.</p></div>' : '<div class="card empty"><h2>No brands above the threshold yet</h2><p class="muted mt2">The brands below show why.</p></div>'}
+  <div id="sel"></div><details class="card flat mt"><summary>${m.rejected.length} ${m.rejected.length === 1 ? 'brand' : 'brands'} not suggested, and why</summary>${m.rejected.map(b => `<div class="fact"><b class="small">${esc(b.name)}</b><span class="small muted" style="text-align:right">Likelihood ${b.likelihood}. ${esc(b.reasons.join(' '))}</span></div>`).join('') || '<p class="faint small mt2">None.</p>'}${m.not_assessed ? `<p class="faint small mt2">${m.not_assessed} more matching brands not assessed yet.</p>` : ''}</details>`;
   $$('[data-p]').forEach(b => b.onclick = () => packs(c, b.dataset.p, b.dataset.n));
+  if (m.assessing) setTimeout(() => { if (location.hash === '#/brands' && !layer.innerHTML && !sel.size) brands(true).catch(() => {}); }, 5000);
   $$('[data-c]').forEach(x => x.onchange = () => { x.checked ? sel.add(x.dataset.c) : sel.delete(x.dataset.c); $('#sel').innerHTML = sel.size >= 2 ? `<div class="selbar"><span>${sel.size} brands selected</span><button class="btn b3 sm" id="cmp">Compare offers</button></div>` : ''; if (sel.size >= 2) $('#cmp').onclick = () => compare(c, [...sel]); });
 }
 async function compare(c, ids) {

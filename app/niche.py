@@ -49,11 +49,11 @@ def profile(niche: str) -> dict:
     own = sorted(set(tokens(niche)))
     learned, source = [], 'words only'
     try:
-        rows, _ = _client().search_companies(f'{niche} brand', limit=15)
+        rows, _ = _client().search_companies(niche, limit=15)
         df = Counter()
         for r in rows:
             b = r.get('basic_info') or {}
-            df.update(set(tokens(' '.join(str(b.get(k) or '') for k in ('name', 'description', 'industries')))))
+            df.update(set(tokens(' '.join([str(b.get('name') or ''), str(b.get('description') or ''), str((r.get('taxonomy') or {}).get('professional_network_industry') or '')]))))
         # A word must appear across several results to count as part of the niche, not one company's detail.
         learned = [w for w, n in df.most_common(40) if n >= max(2, len(rows) // 5) and w not in own][:10]
         source = 'Crustdata Company Search' if rows else source
