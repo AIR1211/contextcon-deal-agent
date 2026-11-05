@@ -4,3 +4,4 @@ __pycache__/
 *.db
 *.pdf
 node_modules/
+CLAUDE.md
