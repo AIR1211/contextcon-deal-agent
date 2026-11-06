@@ -243,4 +243,4 @@ python -m pytest -q               # uses a fake Crustdata, spends no credits
 python -m app.prewarm             # optional: warms the cache for known niches
 ```
 
-`ANTHROPIC_API_KEY` is optional. The LLM layer has never been run live; without it, rules and templates are used. Other reference documents: `docs/spec.txt`, `docs/decisions.txt`, `docs/proofs.txt` and `eval/REPORT.txt`.
+`ANTHROPIC_API_KEY` or `OPENAI_API_KEY` is optional. The LLM layer has never been run live; without a key, rules and templates are used. Other reference documents: `docs/spec.txt`, `docs/decisions.txt`, `docs/proofs.txt` and `eval/REPORT.txt`.

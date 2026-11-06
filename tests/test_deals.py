@@ -290,6 +290,61 @@ def test_pitch_rewrite_that_changes_numbers_is_rejected(world, monkeypatch):
     assert '99' not in text and 'AI agent' in text
 
 
+def test_resolve_llm_uses_openai_when_only_openai_key(monkeypatch):
+    monkeypatch.setattr(config, 'ANTHROPIC_KEY', '')
+    monkeypatch.setattr(config, 'OPENAI_KEY', 'sk-test')
+    monkeypatch.setattr(config, 'LLM_PROVIDER', 'auto')
+    monkeypatch.setattr(config, '_LLM_MODEL_ENV', '')
+    assert config.resolve_llm() == ('openai', 'sk-test', 'gpt-4o-mini')
+    assert llm.llm_enabled()
+
+
+def test_resolve_llm_prefers_anthropic_when_both_keys(monkeypatch):
+    monkeypatch.setattr(config, 'ANTHROPIC_KEY', 'ant-key')
+    monkeypatch.setattr(config, 'OPENAI_KEY', 'sk-test')
+    monkeypatch.setattr(config, 'LLM_PROVIDER', 'auto')
+    monkeypatch.setattr(config, '_LLM_MODEL_ENV', '')
+    assert config.resolve_llm()[0] == 'anthropic'
+
+
+def test_resolve_llm_openai_when_model_is_gpt_and_key_set(monkeypatch):
+    monkeypatch.setattr(config, 'ANTHROPIC_KEY', 'ant-key')
+    monkeypatch.setattr(config, 'OPENAI_KEY', 'sk-test')
+    monkeypatch.setattr(config, 'LLM_PROVIDER', 'auto')
+    monkeypatch.setattr(config, '_LLM_MODEL_ENV', 'gpt-4o')
+    assert config.resolve_llm() == ('openai', 'sk-test', 'gpt-4o')
+
+
+def test_resolve_llm_forced_openai(monkeypatch):
+    monkeypatch.setattr(config, 'ANTHROPIC_KEY', 'ant-key')
+    monkeypatch.setattr(config, 'OPENAI_KEY', 'sk-test')
+    monkeypatch.setattr(config, 'LLM_PROVIDER', 'openai')
+    monkeypatch.setattr(config, '_LLM_MODEL_ENV', '')
+    assert config.resolve_llm()[0] == 'openai'
+
+
+def test_ask_model_routes_to_openai(world, monkeypatch):
+    monkeypatch.setattr(config, 'ANTHROPIC_KEY', '')
+    monkeypatch.setattr(config, 'OPENAI_KEY', 'sk-test')
+    monkeypatch.setattr(config, 'LLM_PROVIDER', 'openai')
+    monkeypatch.setattr(config, '_LLM_MODEL_ENV', 'gpt-4o-mini')
+    seen = {}
+
+    def fake(key, model, prompt, schema, max_tokens):
+        seen.update(key=key, model=model, prompt=prompt, schema=schema, max_tokens=max_tokens)
+        return '{"niche": "snacks"}'
+
+    monkeypatch.setattr(llm, '_call_openai', fake)
+    monkeypatch.setattr(llm, '_call_anthropic', lambda *a, **k: (_ for _ in ()).throw(AssertionError('anthropic')))
+    out = llm._ask_model('fill niche', {'type': 'object', 'properties': {'niche': {'type': 'string'}}, 'required': ['niche']}, 100)
+    assert out == '{"niche": "snacks"}' and seen['key'] == 'sk-test' and seen['model'] == 'gpt-4o-mini'
+
+
+def test_openai_schema_marks_every_property_required():
+    s = llm._openai_schema({'type': 'object', 'properties': {'a': {'type': 'string'}, 'b': {'type': ['integer', 'null']}}, 'required': ['a'], 'additionalProperties': False})
+    assert set(s['required']) == {'a', 'b'} and s['additionalProperties'] is False
+
+
 def test_niche_words_match_whole_word_starts_only():
     from app import niche
     assert niche.hits('eat', 'a great creator') == 0

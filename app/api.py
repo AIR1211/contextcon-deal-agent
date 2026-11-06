@@ -508,4 +508,5 @@ def status():
         balance = service.cd.credits()
     except (Unavailable, KeyError, TypeError):
         balance = None
-    return {'llm_enabled': bool(llm.config.ANTHROPIC_KEY), 'llm_usage': db.get('llm_usage', 'total') or {'calls': 0}, 'crustdata_keys': len(service.cd.keys), 'credits_used_cached': db.credits_used(), 'credit_balance': balance}
+    provider, _, model = llm.config.resolve_llm()
+    return {'llm_enabled': bool(provider), 'llm_provider': provider, 'llm_model': model, 'llm_usage': db.get('llm_usage', 'total') or {'calls': 0}, 'crustdata_keys': len(service.cd.keys), 'credits_used_cached': db.credits_used(), 'credit_balance': balance}

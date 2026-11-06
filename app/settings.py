@@ -35,7 +35,7 @@ DEFAULTS = {
         'show_evidence': True,
         'show_tiebreaks': True,
         'compact': False,
-        'ai_pitch_polish': False,        # Needs an API key. Off by default, because the template pitch uses no tokens.
+        'ai_pitch_polish': False,        # Needs Anthropic or OpenAI. Off by default, because the template pitch uses no tokens.
     },
 }
 CHOICES = {'auto_pack': ('Starter', 'Standard', 'Campaign'), 'motion': ('auto', 'full', 'off'), 'campaign_goal': ('balanced', 'awareness', 'engagement', 'conversion', 'brand_building')}

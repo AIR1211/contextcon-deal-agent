@@ -542,7 +542,7 @@ const SETTINGS = {
     ['#', 'Pace and AI'],
     ['watchable_pace', 'Watchable pace', 'Slows deal steps so people can follow them. The deal page says so while it is on.'],
     ['pace_ms', 'Pause per step (ms)', 'Applies to deals started after this change.', 0, 3000],
-    ['ai_pitch_polish', 'Polish pitches with AI', 'Needs an API key, and uses tokens. Without a key, the template pitch is used.'],
+    ['ai_pitch_polish', 'Polish pitches with AI', 'Needs an Anthropic or OpenAI API key, and uses tokens. Without a key, the template pitch is used.'],
   ]],
 };
 function applyPrefs() {
