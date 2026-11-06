@@ -1,5 +1,9 @@
 # How Avuno is built
 
+![How Avuno is built](architecture.svg)
+
+## The same flow, in more detail
+
 ```mermaid
 flowchart TD
     A[Brand's request<br>email, chat message or PDF] --> B[Read<br>rules only, each detail linked to its line]
