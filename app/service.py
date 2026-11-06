@@ -3,7 +3,7 @@ import re
 import secrets
 import threading
 
-from . import db, packages, scoring, tiebreak
+from . import campaign, db, packages, scoring, tiebreak
 from . import config
 from .config import FEE_BRAND, FEE_CREATOR
 from .engine import settle
@@ -21,6 +21,33 @@ _scores_memo: dict = {}
 _running: set[str] = set()
 _guard = threading.Lock()
 SEARCH_SIZES = ('2-10', '11-50', '51-200', '201-500', '501-1000', '1001-5000')      # Every size of brand.
+
+
+def public_company(c: dict) -> dict:
+    """The budget and the brand's own document stay private. Creators see the creator brief."""
+    out = {k: v for k, v in c.items() if k != 'budget'}
+    if c.get('brief'):
+        out['brief'] = campaign.public(c['brief'])
+    return out
+
+
+def full_brief(company_id: str) -> dict:
+    """The brand's own view, with budget progress. There is no login in this build, so this isn't truly protected yet."""
+    c = db.get('company', company_id)
+    brief = c.get('brief')
+    if not brief:
+        return {}
+    pool = (brief.get('budget') or {}).get('pool')
+    deals = [d for d in db.all_docs('deal') if d['company_id'] == company_id and d.get('settlement') and d['state'] not in ('blocked', 'no_deal')]
+    committed = sum(d['settlement']['price'] for d in deals)
+    return {**brief, 'progress': {'committed': committed, 'remaining': pool - committed if pool else None, 'creators_chosen': sum(len(d['creator_ids']) for d in deals)}}
+
+
+def set_brief(company_id: str, text: str) -> dict:
+    c = db.get('company', company_id)
+    c['brief'] = campaign.parse(text)
+    db.put('company', company_id, c)
+    return c['brief']
 
 
 def public_creator(c: dict) -> dict:
@@ -92,6 +119,11 @@ def register_company(data: CompanyIn, bio_code_seen: bool = False) -> dict:
          'budget': data.budget, 'gstin': data.gstin, 'instagram': data.instagram, 'mode': data.mode, 'source': 'registered'}
     if twin:
         c = {**twin, **c}
+    if data.campaign_brief and data.campaign_brief.strip():
+        c['brief'] = campaign.parse(data.campaign_brief)
+        client = next((f['value'] for f in c['brief']['fields'] if f['key'] == 'client'), None)
+        if client and not set(niches.tokens(data.name)) & set(niches.tokens(client)):
+            c['brief']['flags'].append({'severity': 'warn', 'text': f'The brief names {client} as the client, but this company registered as {data.name}.', 'private': False})
     if data.limits:
         db.put('company_limits', c['id'], data.limits.model_dump())
     elif data.budget and data.mode == 'simulated':
@@ -282,7 +314,7 @@ def _scores(creator: dict, company: dict) -> tuple[int, int]:
 def packs(creator_id: str, company_id: str) -> dict:
     c, co = db.get('creator', creator_id), db.get('company', company_id)
     like, fit_ = _scores(c, co)
-    return {'packs': packages.packs_for(c, co, like, fit_), 'likelihood': like, 'fit': fit_, 'is_estimate': True}
+    return {'packs': packages.packs_for(c, co, like, fit_), 'likelihood': like, 'fit': fit_, 'is_estimate': True, 'brief': campaign.public(co.get('brief'))}
 
 
 def tweak_pack(creator_id: str, company_id: str, before: Terms, after: Terms) -> dict:
@@ -342,6 +374,9 @@ def search_brands(q: str) -> list[dict]:
     """Find a specific brand by name or domain, using the free identify lookup. Adds it to the database if new."""
     q = q.strip()
     domain = clean_domain(q) if '.' in q else None
+    known = [d for d in db.all_docs('company') if d.get('source') == 'registered' and (q.lower() in (d.get('name') or '').lower() or (domain and d.get('domain') == domain))]
+    if known:
+        return [{'company_id': d['id'], 'name': d['name'], 'domain': d.get('domain'), 'status': d['status'], 'description': ''} for d in known[:4]]
     try:
         m = cd.identify_domain(domain)[0] if domain else cd.identify_name(q)[0]
     except Unavailable:

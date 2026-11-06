@@ -24,9 +24,9 @@ def _days(text: str, *words) -> int | None:
 def extract(text: str) -> dict:
     t = text.lower().replace(',', '')
     b = llm.parse_brief_rules(text)
-    perpetual = bool(re.search(r'perpetu|forever|in perpetuity|lifetime (rights|usage)|unlimited usage|all rights|full ownership|buyout', t))
+    perpetual = any(re.search(r'perpetu|forever|in perpetuity|lifetime (rights|usage)|unlimited usage|all rights|full ownership|buyout', s) and not re.search(r"\bnot\b|\bno\b|\bwithout\b|\bnever\b", s) for s in re.split(r'(?<=[.!?\n])\s*', t))
     pay = re.search(r'net\s*-?\s*(\d+)', t)
-    pay_days = int(pay[1]) if pay else _days(t, 'payment', 'paid', 'pay', 'invoice')
+    pay_days = int(pay[1]) if pay else _days(t, 'payment', 'paid', 'pay', 'pays', 'paying', 'invoice')
     return {'budget': b['budget'], 'email': b['email'], 'brand': b['brand'], 'sender_name': b['sender_name'], 'reels': b['reels'], 'stories': b['stories'],
             'usage_days': None if perpetual else _days(t, 'usage', 'rights', 'licen[cs]e', 'reuse'), 'usage_perpetual': perpetual,
             'exclusivity_days': _days(t, 'exclusiv\\w*', 'non-compete'), 'payment_days': pay_days,

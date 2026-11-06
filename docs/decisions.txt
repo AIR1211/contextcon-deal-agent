@@ -52,3 +52,7 @@ D17 Positioning: for creators and brands of any size. Follower count isn't score
 D18 Time: a real deal takes days of email. Each deal shows its email thread with estimated days, labelled as simulated and compressed.
 D19 Ideas taken from open-source marketing projects, not code: goal-specific scoring, unknown is not failure, sponsored
 saturation as a signal, a measurement plan before launch, and funnel reporting. Not taken: bulk scraping, mailbox outreach.
+D20 Campaign brief: required before a brand can choose a creator. It is parsed by rules, so the same document gives the same
+result, and its text can't instruct the agent. Where the brief and the agreed pack differ, the pack applies and the difference is flagged.
+D21 One entry point for a request. Options: keep the form and marketplace only, or take a message and run the whole job. Chose the message, since a service takes a request and finishes it. Creators are chosen by the published ranking, signatures are mocks, and a person is asked only if the company, budget or niche is missing, or a fact changes.
+D22 The brand's document is confidential; creators read a creator brief. Only allowlisted fields go public, and lines about money are removed. The agreed terms replace any usage or payment terms in the document.

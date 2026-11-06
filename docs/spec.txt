@@ -22,6 +22,8 @@ R10 Brands with no website can reach partly_verified through Instagram, GSTIN or
 R11 Contract generated only after gates pass: re-verification, disclosure clause, usage terms, funds held.
 R12 Deal runs step by step, resumes after a crash, and never sends or pays twice.
 R13 Every outgoing message goes to a mock outbox. Nothing reaches real people.
+R15 Brands must supply a campaign brief. Creators can read it before applying. Each deal has a Read brief step that extracts
+    details with the line they came from and applies the rules. Hiding ad disclosure or scam signals stop the deal.
 R14 Escalation only on: cannot_verify, contact left, no overlap, non-standard clause.
 
 NON-FUNCTIONAL
@@ -41,7 +43,7 @@ Pack      creator_ids, company_id, terms, list_price, estimates
 Deal      id, state, creator_ids, company_id, terms, settlement, contract_hash, pending_question
 
 DEAL STATES
-verify -> pitch -> await_company -> negotiate -> contract -> recheck -> sign -> fund -> deliver -> approve -> release
+verify -> read_brief -> pitch -> await_company -> negotiate -> contract -> recheck -> sign -> fund -> deliver -> approve -> release
 -> invoice -> done.  Also: paused (waiting on a person), blocked, no_deal.
 
 API (the company dashboard builds against this; full list at /docs when the server runs)

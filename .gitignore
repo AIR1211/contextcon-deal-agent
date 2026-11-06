@@ -17,3 +17,4 @@ data/*.local.json
 *.mp4
 *.webm
 demo_build/
+!data/sample_campaign_brief.pdf

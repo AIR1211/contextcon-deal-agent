@@ -63,7 +63,8 @@ def brand_value(company_limits: dict, creators: list[dict], t: Terms) -> int:
     total += max(t.usage_days - 30, 0) // 30 * company_limits.get('value_per_30_usage_days', 0)
     total += t.exclusivity_days // 30 * company_limits.get('value_per_30_exclusive_days', 0)
     total += company_limits.get('value_paid_ads', 0) if t.paid_ads else 0
-    return min(total, company_limits.get('ceiling') or total)
+    ceiling = company_limits.get('ceiling')
+    return min(total, ceiling) if ceiling is not None else total
 
 
 def within_limits(creator: dict, t: Terms) -> str | None:
@@ -111,7 +112,7 @@ def evaluate(creator: dict, company: dict, t: Terms, likelihood_score: int, fit_
     close = round(0.5 * likelihood_score + 30 * afford + 0.2 * fit_score)
     net = price - int(price * FEE_CREATOR)
     return {'list_price': price, 'creator_floor': cost, 'creator_net_estimate': net, 'brand_pays_estimate': brand_pays, 'close_estimate': close,
-            'expected_earnings': round(net * close / 100), 'fit': fit_score, 'budget_used': budget, 'is_estimate': True}
+            'expected_earnings': round(net * close / 100), 'fit': fit_score, 'is_estimate': True}
 
 
 def packs_for(creator: dict, company: dict, likelihood_score: int, fit_score: int) -> list[dict]:

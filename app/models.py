@@ -68,6 +68,7 @@ class CompanyIn(BaseModel):
     gstin: Optional[str] = None
     budget: int = Field(0, ge=0)
     limits: Optional[CompanyLimits] = None
+    campaign_brief: Optional[str] = Field(None, max_length=60000)
     mode: str = Field('simulated', pattern='^(simulated|human)$')
 
 

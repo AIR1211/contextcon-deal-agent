@@ -40,6 +40,7 @@ Python, FastAPI, SQLite in one process, plain JavaScript and GSAP, no build step
 | `app/packages.py` | Pricing, packs, tweak deltas, term variations |
 | `app/applications.py` | Applications, offers, accept and decline, Auto Deal |
 | `app/offers.py` | Review of a pasted offer against rules |
+| `app/campaign.py` | Reads a campaign brief from a PDF or text: fields with line references, budget, version, criteria, open questions, and the creator brief |
 | `app/contract.py` | Contract text, gates, hash, invoice |
 | `app/creators.py` | Instagram page parsing and engagement |
 | `app/crustdata.py` | API client: cache, retries, key rotation, trace |
@@ -54,19 +55,20 @@ Python, FastAPI, SQLite in one process, plain JavaScript and GSAP, no build step
 
 **Creator:** enter a handle and free-text niche; the app reads public stats in the background with progress; sees ranked brands with reasons; opens media packs; tweaks terms and sees estimated effects; applies, or turns on Auto Deal; or reviews an offer they received.
 
-**Brand:** registers with name, niche, optional domain, sender, Instagram, GSTIN and budget; is verified; sees ranked offers with reasons; chooses one, which starts a deal; signs. A brand can also pick creators or a bundle directly.
+**Brand:** registers with name, niche, optional domain, sender, Instagram, GSTIN, budget and a required campaign brief, which creators can read before applying; is verified; sees ranked offers with reasons; chooses one, which starts a deal; signs. A brand can also pick creators or a bundle directly.
 
 **Registration merge:** registering a company whose Crustdata ID or domain already exists updates that record. So applications sent to a brand before it registers appear in its inbox afterwards.
 
 ## 5. Deal state machine (`orchestrator.py`)
 
-Order: `verify, pitch, await_company, negotiate, contract, recheck, sign, fund, deliver, approve, release, invoice, done`. Final states: `done`, `blocked`, `no_deal`.
+Order: `verify, read_brief, pitch, await_company, negotiate, contract, recheck, sign, fund, deliver, approve, release, invoice, done`. Final states: `done`, `blocked`, `no_deal`.
 
 The state is saved after each step, so a crash re-runs the step in progress. Actions go through `db.act(key, ...)`, an `INSERT OR IGNORE` on a stable key, so repeats do nothing. A per-deal in-process lock prevents concurrent runs. At startup, every unfinished and unpaused deal resumes.
 
 | Step | What happens | Can stop or pause on |
 |---|---|---|
 | verify | Checks company status, gates per creator and exclusivity conflict. Pulls company data and a lead (role only) from Crustdata | Blocked company, failed gate, conflict → blocked. Contact left, or tier C → question |
+| read_brief | Reads the brand's campaign brief field by field, with line references, and applies rules (`app/campaign.py`). Compares it with the pack. Simulated deals with no brief use a labelled placeholder | Hiding disclosure or scam signals → blocked. No brief on a human or application deal → waits |
 | pitch | Email to the sender, or to the lead's role in a mock inbox | |
 | await_company | Simulated reply, or waits if the company is in human mode | Decline → no_deal. Non-standard clause → question |
 | negotiate | Tries options meeting the requested terms; if none fits and allowed, tries lighter ones. Writes a quote, a counter and agreement to the thread | No overlap → question, which can lower the first creator's floor |
@@ -162,6 +164,21 @@ Verdicts: `reject` (asks the creator to pay, asks for an OTP or password, asks t
   - Labelled offers: 14 of 15 on the first run. The miss was fixed afterwards, so a re-run wouldn't be independent.
 - **Not measured:** whether real brands respond, whether prices are right, or whether matches perform. There is no outcome data.
 
+## 12b. One request, start to finish
+
+`app/intake.py` takes a message in the customer's words and runs read, company and sender check, creator ranking and deals, saving after each stage. The same text is one request. The same company asking for the same campaign in other words stays one record and starts no second deal. It asks a person only for a missing company, budget or niche, and only after the duplicate check.
+
+Known limits: reading is rules only, so a phrasing can be missed. The first run of the demo request missed "pays in 90 days", since fixed. A new campaign in the same niche from the same company is treated as a duplicate, with no way yet to say it is new.
+
+## 12a. Campaign brief
+
+The brand's document is confidential. `campaign.parse` splits it into public and private fields, with line references. Creators and the public API only get `campaign.public`: the creator brief, with no original text, budget, targets, roles or open questions, and any line about money removed.
+
+- **Budget:** takes the current cap and creator pool, and ignores figures on superseded version lines. In a deal, the ceiling is the lowest of the brand's limit, the per-creator share of the pool, and what remains of the pool after other deals.
+- **Criteria:** numeric follower, engagement and India-audience criteria are checked per creator. Missing data is Unknown, and a self-reported audience is at most Partial.
+- **Open questions:** listed with proposed defaults, shown to the brand and never applied silently.
+- **Rules:** hiding ad disclosure or scam signals block the deal. Other conflicts are flagged, and the agreed pack applies.
+
 ## 13. Known weaknesses
 
 **Critical if this were real:**
@@ -196,6 +213,11 @@ Verdicts: `reject` (asks the creator to pay, asks for an OTP or password, asks t
 23. The event stream queries SQLite inside the async loop, and streams on paused deals poll for up to 15 minutes.
 24. The ledger uses `synchronous=NORMAL`: safe for a process crash, but an OS crash could lose the latest rows. With real payments it would also need an outbox pattern, because an action could happen and crash before being recorded.
 25. Startup resume runs inside server start, so paced deals delay startup.
+
+**Campaign brief:**
+26. Parsing is rules only and English only. It takes text-based PDFs, pasted text and .txt or .md files, not scanned PDFs or Word. Unusual layouts can lose fields; these are reported as missing, but a wrong match is possible.
+27. A changed brief is only compared when a deal starts. There's no versioning, and creators aren't notified until then.
+28. The brief binds by fingerprint and quoted must-haves, but nothing checks that delivered content follows it.
 
 **Legal:** the contract template has had no legal review. Consent, GST and TDS, stamp duty and escrow are mocked or noted, and minors are handled only through a self-reported flag.
 

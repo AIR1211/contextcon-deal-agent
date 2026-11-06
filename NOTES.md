@@ -16,3 +16,7 @@ Append what we tried, whether it worked, and why.
 - Mistake: requested a Company Search field that does not exist. Tests missed it because the fake API accepted any field; the fake now rejects unknown fields. The pre-load exposed it by failing on all 40 niches.
 - Added creator applications, a brand offers inbox, Auto Deal, settings and "why" lines. Applications survive a brand registering later, because registration merges into the known company record.
 - Doubted a match ("Zolo") as a false positive; checking showed it was a real fashion brand. Tightened evidence wording anyway: learned words alone now say "looks related".
+- Handbook asks for a request the product has never seen, in a customer's words. Added one entry point: paste a message, and it runs to paid invoices. Rehearsed on other brands, then ran the video's request once on a clean database.
+- That run: company, sender, budget, deliverables, deadline and restrictions were all read correctly, 2 of 2 deals paid. One real miss: "pays in 90 days" wasn't flagged, because the rule only knew "pay". Fixed afterwards. The video shows the original run and doesn't claim the flag.
+- Rehearsal found: a reworded duplicate was asked for its budget before being recognised as a duplicate. Now asks after the duplicate check. A second message also can't replace the contact or budget on a running job.
+- Rehearsal found: Crustdata resolves snitch.co.in to "Snitch Support" (5 people), a wrong record that still reads as verified. Known from eval/REPORT.txt and not solved.

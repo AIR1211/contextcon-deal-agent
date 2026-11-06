@@ -4,7 +4,7 @@ import threading
 import time
 from math import ceil
 
-from . import contract, db, llm, packages
+from . import campaign, contract, db, llm, packages
 from .config import FEE_BRAND, FEE_CREATOR, MAIL_DAYS, TIERS
 from .crustdata import Unavailable
 from .engine import settle
@@ -14,7 +14,7 @@ from . import niche as niches
 from . import service, settings
 from .verify import verify_sender
 
-ORDER = ['verify', 'pitch', 'await_company', 'negotiate', 'contract', 'recheck', 'sign', 'fund', 'deliver', 'approve', 'release', 'invoice', 'done']
+ORDER = ['verify', 'read_brief', 'pitch', 'await_company', 'negotiate', 'contract', 'recheck', 'sign', 'fund', 'deliver', 'approve', 'release', 'invoice', 'done']
 FINAL = {'done', 'blocked', 'no_deal'}
 EXCLUSIVITY_STATES = {'contract', 'recheck', 'sign', 'fund', 'deliver', 'approve', 'release', 'invoice', 'done'}
 _locks: dict[str, threading.Lock] = {}
@@ -47,6 +47,8 @@ def start(data: DealIn) -> dict:
 def public_deal(d: dict) -> dict:
     """Removes values that would let either side work out the other's limit beyond what the result itself shows."""
     out = {k: v for k, v in d.items() if k not in ('private_audit',)}
+    if d.get('brief'):
+        out['brief'] = campaign.public(d['brief'])
     if d.get('settlement'):
         out['settlement'] = {k: v for k, v in d['settlement'].items() if k not in ('surplus', 'options_considered')}
     return out
@@ -69,15 +71,15 @@ def _email(deal, step, to, subject, body, moment=None):
 
 def _brand_mail(deal, company):
     """Who the email is addressed to. Found leads stay in the mock outbox: this build contacts nobody real."""
-    if company.get('sender_email'):
-        return company['sender_email']
     title = (deal.get('lead') or {}).get('title')
+    if company.get('sender_email') and (company.get('sender_status') == VERIFIED or not title):
+        return company['sender_email']
     return f"{title} at {company['name']} (mock inbox)" if title else f"Marketing team at {company['name']} (mock inbox)"
 
 
 def _find_lead(company: dict) -> dict | None:
     """The person to approach, from Crustdata. Only the role is kept: names aren't needed when nobody is contacted."""
-    if company.get('sender_name') or not company.get('company_id'):
+    if company.get('sender_status') == VERIFIED or not company.get('company_id'):
         return None
     try:
         people, ts = service.cd.contacts(company['company_id'])
@@ -161,9 +163,48 @@ def step_verify(deal):
         raise Stop('no_deal', 'Declined after verification review.')
 
 
+def step_read_brief(deal):
+    """Reads the brand's campaign brief field by field, so progress is visible, then applies the rules."""
+    company, creators = _people(deal)
+    brief = company.get('brief')
+    if not brief:
+        if company.get('mode') == 'simulated' and not deal.get('application_id'):
+            brief = campaign.placeholder(company)
+        else:
+            raise Pause('campaign_brief')
+    if deal.get('brief', {}).get('sha') != brief['sha']:      # Skip the readout when a resume repeats this step.
+        for f in brief['fields']:
+            # Private details are named but not shown in the event stream, which anyone with the deal link can read.
+            db.event(deal['id'], 'brief_field', {'key': f['key'], 'label': f['label'], 'private': bool(f.get('private')), 'value': 'Private' if f.get('private') else f['value'], 'lines': f['lines']})
+            if deal.get('pace_ms'):
+                time.sleep(min(deal['pace_ms'], 3000) / 4000)
+    flags = list(brief['flags'])
+    base = Terms(**deal['terms'])
+    if brief.get('reels') and brief['reels'] != base.reels:
+        flags.append({'severity': 'info', 'text': f"The brief mentions {brief['reels']} reel(s) and the pack has {base.reels}. The agreed pack applies."})
+    if brief.get('stories') is not None and brief.get('stories') != base.stories:
+        flags.append({'severity': 'info', 'text': f"The brief mentions {brief['stories']} stories and the pack has {base.stories}. The agreed pack applies."})
+    application = db.get('application', deal['application_id']) if deal.get('application_id') else None
+    if application and application.get('brief_sha') != brief['sha']:
+        flags.append({'severity': 'warn', 'text': 'The brief changed after this creator applied. They are told in the thread.'})
+    deal['brief'] = {**brief, 'flags': flags}
+    db.event(deal['id'], 'brief_read', {'fields': len(brief['fields']), 'flags': len([f for f in flags if not f.get('private')]), 'missing': brief['missing'], 'is_mock': brief.get('is_mock', False)})
+    blocks = [f['text'] for f in flags if f['severity'] == 'block']
+    if blocks:
+        raise Stop('blocked', ' '.join(blocks))
+
+
 def step_pitch(deal):
     company, creators = _people(deal)
     _email(deal, 'pitch', _brand_mail(deal, company), f"Creator package for {company['name']}", llm.pitch_text({'name': company['name'], 'niche': company.get('niche')}, [{'handle': c['handle']} for c in creators], deal['terms']), 'pitch')
+    questions = deal['brief'].get('open_questions') or []
+    if questions:
+        _email(deal, 'brief_questions', _brand_mail(deal, company), 'Questions on your campaign brief', f"Your brief leaves {len(questions)} questions open. Our proposed defaults are on your brand page, and we won't assume any of them silently.", 'pitch')
+    must, avoid = campaign.must_lines(deal['brief'])
+    changed = any(f['text'].startswith('The brief changed') for f in deal['brief']['flags'])
+    note = (f"Must include: {must.rstrip('. ')}. " if must else '') + (f"Must avoid: {avoid.rstrip('. ')}. " if avoid else '') + ('This brief changed after you applied, so please read it again.' if changed else '')
+    for c in creators:
+        _email(deal, 'brief_share', '@' + c['handle'], 'Campaign brief to read', f"Here is what {company['name']} needs. {note}".strip(), 'pitch')
 
 
 def step_await_company(deal):
@@ -184,10 +225,16 @@ def step_await_company(deal):
 
 
 def _limits(deal, company, creators, base):
-    lim = db.get('company_limits', company['id'])
-    if lim:
-        return lim
-    return {'ceiling': packages.company_budget(company), 'simulated': True}
+    """The brand's limits, narrowed by its brief: the current creator pool, less what's already committed elsewhere."""
+    lim = dict(db.get('company_limits', company['id']) or {'ceiling': packages.company_budget(company), 'simulated': True})
+    budget = (deal.get('brief') or {}).get('budget') or {}
+    if budget.get('pool'):
+        others = [d for d in db.all_docs('deal') if d['id'] != deal['id'] and d['company_id'] == company['id'] and d.get('settlement') and d['state'] not in ('blocked', 'no_deal')]
+        remaining = budget['pool'] - sum(d['settlement']['price'] for d in others)
+        share = (budget.get('per_creator') or budget['pool']) * len(creators)
+        lim['ceiling'] = max(min(v for v in (lim.get('ceiling'), share, remaining) if v is not None), 0)
+        db.event(deal['id'], 'budget_checked', {'within_pool': remaining > 0})
+    return lim
 
 
 def step_negotiate(deal):
@@ -245,11 +292,13 @@ def step_recheck(deal):
         changed = f"{company.get('sender_name') or 'The company contact'} left {company['name']} during this deal (simulated)."
     elif deal.get('simulate_outage'):
         changed = 'The verification source timed out, so nothing could be re-checked (simulated). Facts stay unconfirmed instead of being assumed.'
-    elif company.get('company_id') and company.get('domain'):
+    elif company.get('domain'):
         try:
-            if not service.cd.identify_domain(company['domain'], fresh=True)[0]:
-                changed = f"{company['domain']} no longer resolves to a company."
-            service.cd.enrich_company(company['company_id'], fresh=True)
+            resolves = service.cd.identify_domain(company['domain'], fresh=True)[0]
+            if company.get('company_id'):
+                if not resolves:
+                    changed = f"{company['domain']} no longer resolves to a company."
+                service.cd.enrich_company(company['company_id'], fresh=True)
         except Unavailable as e:
             changed = f'The company could not be re-checked before signing ({e}), so this is unconfirmed.'
     if not changed and company.get('sender_status') == VERIFIED:
@@ -332,7 +381,7 @@ def step_invoice(deal):
     _email(deal, 'invoice', _brand_mail(deal, company), f"Invoice {inv['number']}", f"Total INR {inv['total']:,}. Mock invoice.", 'invoice')
 
 
-STEPS = {'verify': step_verify, 'pitch': step_pitch, 'await_company': step_await_company, 'negotiate': step_negotiate, 'contract': step_contract, 'recheck': step_recheck, 'sign': step_sign, 'fund': step_fund, 'deliver': step_deliver, 'approve': step_approve, 'release': step_release, 'invoice': step_invoice}
+STEPS = {'verify': step_verify, 'read_brief': step_read_brief, 'pitch': step_pitch, 'await_company': step_await_company, 'negotiate': step_negotiate, 'contract': step_contract, 'recheck': step_recheck, 'sign': step_sign, 'fund': step_fund, 'deliver': step_deliver, 'approve': step_approve, 'release': step_release, 'invoice': step_invoice}
 
 
 def run(deal_id: str, crash_after: str | None = None) -> dict:

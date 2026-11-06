@@ -286,5 +286,389 @@
     "Style tips"
    ]
   }
+ },
+ {
+  "handle": "demo_ai_tools_daily",
+  "niche": "AI tools and productivity",
+  "limits": {
+   "floor_reel": 6000
+  },
+  "audience_country_pct": 82,
+  "mock_stats": {
+   "followers": 48000,
+   "following": 410,
+   "posts": 390,
+   "likes": [
+    2100,
+    1880,
+    2350,
+    2240
+   ],
+   "comments": [
+    120,
+    96,
+    142,
+    118
+   ],
+   "bio": "Trying AI tools so you don't have to",
+   "captions": [
+    "AI tools for productivity",
+    "Software that saves time",
+    "My productivity setup #ad",
+    "AI notes workflow"
+   ]
+  }
+ },
+ {
+  "handle": "demo_study_stack",
+  "niche": "student productivity",
+  "limits": {
+   "floor_reel": 4000
+  },
+  "audience_country_pct": 91,
+  "mock_stats": {
+   "followers": 26000,
+   "following": 540,
+   "posts": 260,
+   "likes": [
+    1250,
+    1180,
+    1320,
+    1400
+   ],
+   "comments": [
+    64,
+    58,
+    71,
+    80
+   ],
+   "bio": "Study systems for busy students",
+   "captions": [
+    "How I organize my notes",
+    "Student productivity system",
+    "Study workflow for exams",
+    "Planning my week"
+   ]
+  }
+ },
+ {
+  "handle": "demo_code_and_coffee",
+  "niche": "technology education",
+  "limits": {
+   "floor_reel": 2500
+  },
+  "audience_country_pct": 88,
+  "mock_stats": {
+   "followers": 9500,
+   "following": 300,
+   "posts": 170,
+   "likes": [
+    620,
+    700,
+    590,
+    660
+   ],
+   "comments": [
+    41,
+    52,
+    37,
+    44
+   ],
+   "bio": "Software explained simply",
+   "captions": [
+    "Organizing a software project",
+    "Tools for students learning to code",
+    "Research workflow",
+    "Productivity for developers"
+   ]
+  }
+ },
+ {
+  "handle": "demo_gadget_guru",
+  "niche": "technology reviews",
+  "limits": {
+   "floor_reel": 22000
+  },
+  "audience_country_pct": 55,
+  "mock_stats": {
+   "followers": 310000,
+   "following": 900,
+   "posts": 1400,
+   "likes": [
+    3100,
+    2800,
+    3300,
+    2950
+   ],
+   "comments": [
+    110,
+    95,
+    130,
+    102
+   ],
+   "bio": "Phones, laptops and software",
+   "captions": [
+    "Laptop review #ad",
+    "Software I use daily #sponsored",
+    "New phone #ad",
+    "Tech news"
+   ]
+  }
+ },
+ {
+  "handle": "demo_skin_by_sana",
+  "niche": "skincare",
+  "limits": {
+   "floor_reel": 3500
+  },
+  "audience_country_pct": 86,
+  "mock_stats": {
+   "followers": 22000,
+   "following": 400,
+   "posts": 300,
+   "likes": [
+    1300,
+    1180,
+    1420,
+    1260
+   ],
+   "comments": [
+    66,
+    58,
+    74,
+    61
+   ],
+   "bio": "Honest skincare for Indian skin",
+   "captions": [
+    "My skincare routine",
+    "Sunscreen I actually wear #ad",
+    "Skincare for humid weather",
+    "Serum review"
+   ]
+  }
+ },
+ {
+  "handle": "demo_beauty_on_budget",
+  "niche": "beauty and makeup",
+  "limits": {
+   "floor_reel": 3000
+  },
+  "audience_country_pct": 90,
+  "mock_stats": {
+   "followers": 15500,
+   "following": 400,
+   "posts": 300,
+   "likes": [
+    880,
+    950,
+    820,
+    900
+   ],
+   "comments": [
+    40,
+    52,
+    35,
+    44
+   ],
+   "bio": "Beauty that costs less",
+   "captions": [
+    "Budget beauty finds",
+    "Makeup under 500",
+    "Skincare and makeup basics #sponsored",
+    "Everyday beauty routine"
+   ]
+  }
+ },
+ {
+  "handle": "demo_weekend_wander",
+  "niche": "travel",
+  "limits": {
+   "floor_reel": 5000
+  },
+  "audience_country_pct": 80,
+  "mock_stats": {
+   "followers": 34000,
+   "following": 400,
+   "posts": 300,
+   "likes": [
+    1700,
+    1540,
+    1880,
+    1610
+   ],
+   "comments": [
+    70,
+    64,
+    92,
+    77
+   ],
+   "bio": "Weekend trips from metro cities",
+   "captions": [
+    "Packing light for travel",
+    "Luggage I trust on every trip",
+    "Three days in Hampi",
+    "Travel on a budget #ad"
+   ]
+  }
+ },
+ {
+  "handle": "demo_paisa_simplified",
+  "niche": "personal finance",
+  "limits": {
+   "floor_reel": 6000
+  },
+  "audience_country_pct": 93,
+  "mock_stats": {
+   "followers": 41000,
+   "following": 400,
+   "posts": 300,
+   "likes": [
+    2300,
+    2050,
+    2600,
+    2150
+   ],
+   "comments": [
+    190,
+    160,
+    240,
+    175
+   ],
+   "bio": "Money explained simply",
+   "captions": [
+    "Saving your first lakh",
+    "Credit cards explained",
+    "SIPs for beginners",
+    "Budgeting apps I use"
+   ]
+  }
+ },
+ {
+  "handle": "demo_new_mom_diaries",
+  "niche": "parenting",
+  "limits": {
+   "floor_reel": 3200
+  },
+  "audience_country_pct": 88,
+  "mock_stats": {
+   "followers": 18000,
+   "following": 400,
+   "posts": 300,
+   "likes": [
+    1100,
+    980,
+    1240,
+    1050
+   ],
+   "comments": [
+    85,
+    72,
+    96,
+    80
+   ],
+   "bio": "Real talk on parenting",
+   "captions": [
+    "Baby care routine",
+    "Toddler food ideas",
+    "Parenting products we use #ad",
+    "New mom essentials"
+   ]
+  }
+ },
+ {
+  "handle": "demo_clutch_gaming",
+  "niche": "gaming",
+  "limits": {
+   "floor_reel": 4500
+  },
+  "audience_country_pct": 77,
+  "mock_stats": {
+   "followers": 52000,
+   "following": 400,
+   "posts": 300,
+   "likes": [
+    2900,
+    2600,
+    3200,
+    2750
+   ],
+   "comments": [
+    210,
+    180,
+    260,
+    195
+   ],
+   "bio": "Mobile and PC gaming",
+   "captions": [
+    "Best gaming headset",
+    "BGMI tips",
+    "Gaming setup tour #sponsored",
+    "New game review"
+   ]
+  }
+ },
+ {
+  "handle": "demo_home_and_hearth",
+  "niche": "home and kitchen",
+  "limits": {
+   "floor_reel": 2800
+  },
+  "audience_country_pct": 92,
+  "mock_stats": {
+   "followers": 12500,
+   "following": 400,
+   "posts": 300,
+   "likes": [
+    720,
+    690,
+    810,
+    700
+   ],
+   "comments": [
+    38,
+    33,
+    47,
+    36
+   ],
+   "bio": "Small homes, well run",
+   "captions": [
+    "Kitchen tools worth buying",
+    "Organising a small kitchen",
+    "Home decor under 1000",
+    "Cookware I use daily"
+   ]
+  }
+ },
+ {
+  "handle": "demo_morning_cup",
+  "niche": "coffee and beverages",
+  "limits": {
+   "floor_reel": 2600
+  },
+  "audience_country_pct": 85,
+  "mock_stats": {
+   "followers": 11000,
+   "following": 400,
+   "posts": 300,
+   "likes": [
+    690,
+    640,
+    750,
+    665
+   ],
+   "comments": [
+    34,
+    30,
+    41,
+    33
+   ],
+   "bio": "A better cup every morning",
+   "captions": [
+    "Cold brew at home",
+    "Coffee beans I love",
+    "Filter coffee guide",
+    "Morning coffee routine #ad"
+   ]
+  }
  }
 ]

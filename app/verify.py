@@ -85,6 +85,8 @@ def verify_brand(cd: Crustdata, name=None, domain=None, instagram=None, gstin=No
             b = m[0]['company_data']['basic_info']
             out.update(company_id=m[0]['company_data']['crustdata_company_id'], name=b.get('name') or name, status=VERIFIED)
             facts.append(Fact(subject=subject, field='company', value=b.get('name'), source='Crustdata Company Identify', as_of=ts, url=b.get('website')).model_dump())
+            if b.get('year_founded'):
+                facts.append(Fact(subject=subject, field='founded', value=str(b['year_founded']), source='Crustdata Company Identify', as_of=ts).model_dump())
             claimed = group_of(name)
             if claimed and claimed['domain'] != d:
                 out['status'] = BLOCKED
@@ -149,7 +151,7 @@ def verify_sender(cd: Crustdata, name, email, company_id, company_domain, profil
         out['facts'].append(Fact(subject=subject, field='employment', value='past employee', source='Crustdata Person Search', as_of=ts, strength=LEFT).model_dump())
         return out
     if not cur:
-        out['reasons'].append(f'No profile found for {name} at this company.')
+        out['reasons'].append(f'No profile found for {name} at this company.' + ('' if work_email else ' The email is not on the company domain either.'))
         return out
     out['facts'].append(Fact(subject=subject, field='name_match', value=f'{len(cur)} profile(s)', source='Crustdata Person Search', as_of=ts, strength=WEAK).model_dump())
     out['status'] = WEAK

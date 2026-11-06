@@ -1,5 +1,6 @@
 """HTTP API for both dashboards. Run: uvicorn app.api:app --reload  Interactive docs are at /docs. No login in this build."""
 import asyncio
+import base64
 import json
 import re
 import time
@@ -12,7 +13,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from . import applications, config, db, llm, offers, orchestrator as orch, service, settings
+from . import applications, campaign, config, db, intake, llm, offers, orchestrator as orch, service, settings
 from .crustdata import Unavailable
 from .models import CompanyIn, CompanyLimits, CompanyResponse, CreatorIn, CreatorLimits, DealIn, Decision, Terms
 
@@ -66,6 +67,9 @@ def resume_interrupted():
     for d in db.all_docs('deal'):
         if d['state'] not in orch.FINAL and not d.get('paused'):
             safe_run(d['id'])
+    for r in db.all_docs('request'):
+        if r['stage'] in intake.STAGES and not r.get('paused'):
+            intake.start(r['id'])
 
 
 @app.get('/')
@@ -234,12 +238,109 @@ def create_company(data: CompanyIn):
 
 @app.get('/api/companies')
 def list_companies():
-    return db.all_docs('company')
+    return [service.public_company(c) for c in db.all_docs('company')]
 
 
 @app.get('/api/companies/{cid}')
 def get_company(cid: str):
-    return need('company', cid)
+    return service.public_company(need('company', cid))
+
+
+class RequestIn(BaseModel):
+    text: str = Field(min_length=20, max_length=60000)
+
+
+class RequestAnswer(BaseModel):
+    company: str | None = Field(None, max_length=200)
+    domain: str | None = Field(None, max_length=200)
+    budget: int | None = Field(None, ge=0)
+    niche: str | None = Field(None, max_length=200)
+
+
+@app.post('/api/requests', dependencies=[Depends(spend_limit)])
+def new_request(x: RequestIn):
+    """One message in, finished work out. Pasting the same message twice returns the first request."""
+    case = intake.submit(x.text)
+    intake.start(case['id'])
+    return intake.public(case)
+
+
+@app.get('/api/requests')
+def list_requests():
+    return [intake.public(r) for r in db.all_docs('request')]
+
+
+@app.get('/api/requests/{rid}')
+def get_request(rid: str):
+    return intake.public(need('request', rid))
+
+
+@app.post('/api/requests/{rid}/answer')
+def answer_request(rid: str, x: RequestAnswer):
+    need('request', rid)
+    return intake.answer(rid, x.model_dump())
+
+
+class BriefDoc(BaseModel):
+    text: str = Field(min_length=30, max_length=60000)
+
+
+class BriefFile(BaseModel):
+    filename: str = Field(max_length=300)
+    b64: str = Field(max_length=15000000)
+
+
+@app.post('/api/briefs/extract')
+def extract_brief(x: BriefFile):
+    """Reads an uploaded PDF, then returns its text and what was found. Nothing is saved until the company registers."""
+    try:
+        data = base64.b64decode(x.b64, validate=True)
+    except ValueError:
+        raise HTTPException(400, 'That file could not be read.')
+    if not data.startswith(b'%PDF'):
+        raise HTTPException(400, 'Please upload a PDF, or paste the text.')
+    try:
+        out = campaign.extract_pdf(data)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+    return {**out, **read_preview(out['text'])}
+
+
+def read_preview(text: str) -> dict:
+    p = campaign.parse(text)
+    by = {f['key']: f['value'] for f in p['fields']}
+    return {'client': re.sub(r'\s*\(.*?\)\s*', ' ', by.get('client', '')).strip(), 'product': by.get('product', ''), 'cap': (p.get('budget') or {}).get('cap'), 'details_found': len(p['fields']), 'missing': p['missing']}
+
+
+@app.post('/api/briefs/preview')
+def preview_brief(x: BriefDoc):
+    return read_preview(x.text)
+
+
+@app.get('/api/companies/{cid}/brief')
+def full_brief(cid: str):
+    """The brand's own view of its brief. Protected by a login once this build has one."""
+    need('company', cid)
+    return service.full_brief(cid)
+
+
+@app.post('/api/companies/{cid}/brief')
+def save_brief(cid: str, x: BriefDoc):
+    need('company', cid)
+    service.set_brief(cid, x.text)
+    return service.full_brief(cid)
+
+
+@app.get('/api/demo/sample-brief')
+def sample_brief():
+    """A fictional sample document, for trying the flow."""
+    out = campaign.extract_pdf((config.DATA / 'sample_campaign_brief.pdf').read_bytes())
+    return {**out, **read_preview(out['text'])}
+
+
+@app.get('/api/demo/sample-brief.pdf')
+def sample_brief_pdf():
+    return FileResponse(config.DATA / 'sample_campaign_brief.pdf', media_type='application/pdf', filename='sample_campaign_brief.pdf')
 
 
 @app.get('/api/companies/{cid}/creators')
@@ -337,6 +438,13 @@ def own_contract(did: str, x: OwnContract):
     if not re.search(r'disclos|ASCI|paid partnership', x.text, re.I):
         raise HTTPException(400, 'The contract must include an ad disclosure clause, as ASCI guidelines require.')
     return orch.public_deal(orch.set_field(did, 'own_contract', x.text))
+
+
+@app.post('/api/deals/{did}/brief')
+def add_brief_to_deal(did: str, x: BriefDoc):
+    d = need('deal', did)
+    service.set_brief(d['company_id'], x.text)
+    return orch.public_deal(orch.run(did))
 
 
 @app.post('/api/deals/{did}/sign')

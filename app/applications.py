@@ -1,6 +1,6 @@
 """Creators apply to brands with a media pack, and brands choose. Auto Deal applies on a creator's behalf above set thresholds.
 Applying never commits anyone: nothing is signed until the brand accepts and the deal runs."""
-from . import db, llm, orchestrator as orch, packages, scoring, service, settings, tiebreak
+from . import campaign, db, llm, orchestrator as orch, packages, scoring, service, settings, tiebreak
 from .models import DealIn, Terms
 
 
@@ -24,7 +24,7 @@ def create(creator_id: str, company_id: str, terms: Terms, pack: str = 'Standard
         raise ValueError(problem)
     s = service._brand_score(company, creator['niche'], True)      # Looks up the brand if needed, so the reason is real.
     f = scoring.fit(creator, company)
-    a = {'id': db.new_id('app'), 'creator_id': creator_id, 'handle': creator['handle'], 'company_id': company_id, 'company_name': company['name'], 'terms': terms.model_dump(), 'pack': pack, 'status': 'sent', 'source': source,
+    a = {'id': db.new_id('app'), 'creator_id': creator_id, 'handle': creator['handle'], 'company_id': company_id, 'company_name': company['name'], 'terms': terms.model_dump(), 'pack': pack, 'status': 'sent', 'source': source, 'brief_sha': (company.get('brief') or {}).get('sha'),
          'sent_at': db.now(), 'deal_id': None, 'is_mock': creator.get('is_mock', False), 'why_brand': scoring.why_brand(company['name'], s, company['status']), 'why_creator': scoring.why_creator(creator, f, company)}
     db.put('application', a['id'], a)
     body = llm.pitch_text({'name': company['name'], 'niche': company.get('niche')}, [{'handle': creator['handle']}], a['terms'])
@@ -56,7 +56,7 @@ def for_company(company_id: str) -> dict:
         f = scoring.fit(c, company)
         s = c.get('stats') or {}
         rows.append({**a, 'creator_id': c['id'], 'niche': c['niche'], 'followers': s.get('followers'), 'engagement_rate': s.get('engagement_rate'), 'fit': f['score'], 'confidence': f['confidence'], 'gates_failed': f['gates_failed'],
-                     'reasons': f['reasons'], 'list_price_estimate': packages.list_price(c, Terms(**a['terms'])), 'deals_done': done.get(c['id'], 0), 'why': scoring.why_creator(c, f, company)})
+                     'reasons': f['reasons'], 'list_price_estimate': packages.list_price(c, Terms(**a['terms'])), 'deals_done': done.get(c['id'], 0), 'why': scoring.why_creator(c, f, company), 'brief_checks': campaign.check_creator(company.get('brief'), c)})
     floor = settings.get('company', company_id)['offers_min_fit']
     shown, hidden = [r for r in rows if r['fit'] >= floor], [r for r in rows if r['fit'] < floor]
     return {'open': tiebreak.rank_creators(shown, company_id), 'hidden': len(hidden), 'closed': [x for x in apps if x['status'] != 'sent']}
@@ -69,6 +69,8 @@ def accept(app_id: str, decline_others: bool | None = None) -> dict:
         return db.get('deal', a['deal_id'])
     if a['status'] != 'sent':
         raise ValueError('This application is closed.')
+    if not db.get('company', a['company_id']).get('brief'):
+        raise ValueError('Add your campaign brief before choosing a creator. Creators need something to read.')
     cs, app = settings.get('company', a['company_id']), settings.get('app')
     d = orch.start(DealIn(creator_ids=[a['creator_id']], company_id=a['company_id'], terms=Terms(**a['terms']), simulate_parties=cs['simulate_delivery'], pace_ms=app['pace_ms'] if app['watchable_pace'] else 0))
     d.update(company_response={'accept': True}, human_sign=cs['sign_myself'], application_id=app_id)

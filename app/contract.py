@@ -1,10 +1,24 @@
 """Contract and invoice generation. A template with cited clauses, reviewed by a person before any real use."""
 import hashlib
+import re
 from datetime import date
 
 from .config import FEE_BRAND, FEE_CREATOR
 
 NOTICE = 'DRAFT FOR A HACKATHON DEMO. Not legal advice. E-signature and escrow are mocked.'
+
+
+def _brief_section(deal: dict) -> str:
+    brief = deal.get('brief')
+    if not brief:
+        return 'No campaign brief was supplied.'
+    by_key = {f['key']: f['value'] for f in brief.get('fields', [])}
+    parts = [f"The creator follows the campaign's creator brief, based on the brand's document with fingerprint {brief['sha'][:16]}."]
+    for label, key in (('Must include', 'must_do'), ('Key messages', 'key_message'), ('Must avoid', 'must_not')):
+        if by_key.get(key) and not re.search(r'₹|budget', by_key[key], re.I):
+            parts.append(f'{label}: {by_key[key]}.')
+    parts.append('Where the brief and this agreement differ, this agreement applies.')
+    return ' '.join(parts)
 
 
 def tracking_code(deal: dict) -> str:
@@ -42,6 +56,7 @@ def render(deal: dict, company: dict, creators: list[dict], clauses: dict | None
         ('PAYMENT', f"{tier['upfront_pct']}% of the brand payment is held before work starts. The balance is due on delivery approval.\nHeld funds are released to the creator when the brand approves, or automatically 7 days after delivery with no objection.{kill}"),
         ('USAGE RIGHTS', f"The brand may reuse the content for {usage} days from first posting{', including paid advertising' if t.get('paid_ads') else ', organic use only'}.\nThe creator keeps ownership of the content."),
         ('EXCLUSIVITY', f'The creator will not promote direct competitors for {excl} days.' if excl else 'None.'),
+        ('CAMPAIGN BRIEF', _brief_section(deal)),
         ('MEASUREMENT', f"Links and captions carry the code {tracking_code(deal)}, so results can be attributed. The creator shares post analytics within 7 days of the usage period starting."),
         ('AD DISCLOSURE', 'All posts must clearly disclose the paid partnership, following ASCI influencer guidelines.'),
         ('TAX', 'Each party is responsible for its own taxes. GST and TDS details are shown on the invoice.'),

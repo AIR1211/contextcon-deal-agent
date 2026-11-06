@@ -37,13 +37,13 @@ const chip = (t = 'Fetching from Crustdata') => `<span class="live-chip"><i></i>
 const working = (t, live) => `<div class="fetch">${live ? chip() : ''}<p>${esc(t)}</p><div class="stripe" role="progressbar" aria-label="${esc(t)}"></div></div>`;
 const spinner = (t, live) => `<div class="card">${working(t, live)}</div>`;
 let APP = { watchable_pace: true, pace_ms: 900, show_data_calls: true };
-const fieldNames = { lead: 'Person to approach', headcount: 'Headcount', last_funding: 'Last funding', company_data: 'Company data', followers: 'Followers', engagement_rate: 'Engagement', median_likes: 'Median likes', median_comments: 'Median comments', company: 'Company', group: 'Company group', domain: 'Domain check', name_match: 'Name match', current_employer: 'Current employer', employment: 'Employment', gstin_format: 'GSTIN format', instagram_followers: 'Instagram followers', influencer_roles: 'Influencer roles' };
+const fieldNames = { founded: 'Founded', lead: 'Person to approach', headcount: 'Headcount', last_funding: 'Last funding', company_data: 'Company data', followers: 'Followers', engagement_rate: 'Engagement', median_likes: 'Median likes', median_comments: 'Median comments', company: 'Company', group: 'Company group', domain: 'Domain check', name_match: 'Name match', current_employer: 'Current employer', employment: 'Employment', gstin_format: 'GSTIN format', instagram_followers: 'Instagram followers', influencer_roles: 'Influencer roles' };
 function factValue(f) { if (f.field === 'engagement_rate') return pct(f.value); if (typeof f.value === 'number') return count(f.value); if (f.value === true) return 'Valid'; if (f.value === false) return 'Invalid'; return f.value; }
 const factRows = fs => (fs || []).map(f => `<div class="fact"><div><b class="small">${esc(fieldNames[f.field] || f.field)}</b><small>${esc(f.source)}${f.as_of ? ' · ' + esc(day(f.as_of)) : ''}</small></div><div class="row" style="gap:6px;justify-content:flex-end"><span class="small">${esc(factValue(f))}</span>${f.is_mock ? '<span class="tag">Mock</span>' : ''}</div></div>`).join('') || '<p class="faint small">No facts could be checked.</p>';
 
 /* Shell */
 function nav() {
-  const items = S.role === 'creator' ? [['home', 'Home', 'home'], ['brands', 'Brands', 'brands'], ['applications', 'Applications', 'send'], ['deals', 'Deals', 'deals'], ['messages', 'Messages', 'mail'], ['settings', 'Settings', 'gear']] : [['home', 'Home', 'home'], ['offers', 'Offers', 'inbox'], ['creators', 'Creators', 'creators'], ['deals', 'Deals', 'deals'], ['messages', 'Messages', 'mail'], ['settings', 'Settings', 'gear']];
+  const items = S.role === 'creator' ? [['home', 'Home', 'home'], ['brands', 'Brands', 'brands'], ['applications', 'Applications', 'send'], ['deals', 'Deals', 'deals'], ['messages', 'Messages', 'mail'], ['settings', 'Settings', 'gear']] : [['request', 'New request', 'send'], ['home', 'Home', 'home'], ['offers', 'Offers', 'inbox'], ['creators', 'Creators', 'creators'], ['deals', 'Deals', 'deals'], ['messages', 'Messages', 'mail'], ['settings', 'Settings', 'gear']];
   const now = (location.hash.slice(2) || 'home').split('/')[0];
   $('#nav').innerHTML = items.map(([h, l, i]) => `<a href="#/${h}" class="${now === h ? 'on' : ''}" ${now === h ? 'aria-current="page"' : ''}>${icon(i)}${l}</a>`).join('');
   $('#r-creator').className = S.role === 'creator' ? 'on' : ''; $('#r-brand').className = S.role === 'brand' ? 'on' : '';
@@ -54,11 +54,13 @@ async function foot() { try { const s = await api('/api/status'); $('#foot').inn
 
 async function route() {
   if (S.es) { S.es.close(); S.es = null; }
+  clearTimeout(S.caseTimer);
   save(); nav(); layer.innerHTML = '';
   const [page, id] = (location.hash.slice(2) || 'home').split('/');
   try {
     if (page === 'deals' && id) return await dealRoom(id);
-    const views = { home: S.role === 'creator' ? creatorHome : brandHome, brands, creators, deals, messages, applications: applicationsPage, offers: offersPage, settings: settingsPage };
+    if (page === 'request' && id) return await caseRoom(id);
+    const views = { request: requestPage, home: S.role === 'creator' ? creatorHome : brandHome, brands, creators, deals, messages, applications: applicationsPage, offers: offersPage, settings: settingsPage };
     await (views[page] || views.home)();
     fx.page(view);
   } catch (e) { view.innerHTML = `<div class="card empty"><h2>That didn't load</h2><p class="muted mt2">${esc(e.message)}</p></div>`; }
@@ -161,7 +163,7 @@ async function packs(c, companyId, name) {
     <div class="grid g3 mt3"><div><div class="cap faint">List price</div><b class="num">${sign(r.delta.list_price)}</b></div><div><div class="cap faint">Close estimate</div><b class="num">${sign(r.delta.close_estimate)} pts</b></div><div><div class="cap faint">Expected earnings</div><b class="num">${sign(r.delta.expected_earnings)}</b></div></div><p class="cap faint mt3">${esc(r.note)}</p></div>`;
     $('#go').disabled = r.verdict === 'blocked';
   };
-  $('.drawer').innerHTML = `<div class="row between"><div><h2>Media packs for ${esc(name)}</h2><p class="small muted">Likelihood ${p.likelihood} · fit ${p.fit} · <span class="tag">Estimates</span></p></div>${closeBtn()}</div><div class="stack mt" id="pk" style="gap:var(--s2)"></div><div class="card mt"><h3 style="margin-bottom:var(--s3)">Tweak it</h3><div id="tw"></div></div><div id="dl"></div>
+  $('.drawer').innerHTML = `<div class="row between"><div><h2>Media packs for ${esc(name)}</h2><p class="small muted">Likelihood ${p.likelihood} · fit ${p.fit} · <span class="tag">Estimates</span></p></div>${closeBtn()}</div><div class="mt">${p.brief ? creatorDoc(p.brief.creator_brief, { note: `What ${name} is asking for. Read this before you apply. Budget and internal details are removed.` }) : `<div class="ask"><div><h3>No campaign brief yet</h3><p class="small">You can still apply, but a deal can't start until ${esc(name)} adds one.</p></div></div>`}</div><div class="stack mt" id="pk" style="gap:var(--s2)"></div><div class="card mt"><h3 style="margin-bottom:var(--s3)">Tweak it</h3><div id="tw"></div></div><div id="dl"></div>
   <button class="btn b1 mt" id="go" style="width:100%">Apply to this brand ${icon('send')}</button><button class="btn b2 mt2" id="sim" style="width:100%">Run a simulated deal instead</button><p class="cap faint mt2">Applying waits for the brand to choose. A simulated deal uses a stand-in for the brand. Nothing reaches anyone real either way.</p>`;
   $$('[data-close]').forEach(x => x.onclick = () => { layer.innerHTML = ''; });
   paint();
@@ -176,26 +178,125 @@ async function startDeal(creatorIds, companyId, terms, extra = '') {
 
 /* Brand side */
 async function loadCompany() { if (!S.company) return null; try { return await api(`/api/companies/${S.company}`); } catch { S.company = null; save(); return null; } }
+async function requestPage() {
+  const all = await api('/api/requests');
+  view.innerHTML = `<div class="req-hero"><p class="cap" style="letter-spacing:.14em;color:var(--ochre-deep)">TELL US WHAT YOU NEED</p><h1 class="hero-title mt2">Paste the request. We'll do the job.</h1><p class="muted mt2" style="font-size:16px">An email, a WhatsApp message or a full brief, however messy. Avuno checks who's asking, finds creators, negotiates, signs and gets everyone paid. It only asks you when your answer changes the result.</p>
+  <textarea id="rq" aria-label="The request" placeholder="Hi, we're launching…"></textarea><div class="row mt3" style="gap:var(--s2)"><button class="btn b1" id="rqgo">Run this request ${icon('arrow')}</button><label class="btn b2 sm" style="cursor:pointer">Upload a brief (PDF, .txt, .md)<input type="file" id="rqf" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden></label><a class="small" href="#" id="rqform">Use the form instead</a><span class="small muted" id="rqs"></span></div>
+  ${all.length ? `<div class="card mt"><h3>Earlier requests</h3><div class="mt2">${all.map(r => `<a class="req-row" href="#/request/${esc(r.id)}"><div class="grow"><b class="small">${esc(r.company_name || r.text.slice(0, 60))}</b></div><span class="small muted">${esc(caseStatus(r)[1])}</span></a>`).join('')}</div></div>` : ''}</div>`;
+  $('#rqform').onclick = e => { e.preventDefault(); onboardBrand(); };
+  $('#rqgo').onclick = async () => { const text = $('#rq').value; if (text.trim().length < 20) { $('#rqs').textContent = 'Please paste the whole request.'; return; } $('#rqgo').disabled = true; try { const c = await api('/api/requests', { text }); location.hash = `#/request/${c.id}`; } catch (x) { $('#rqgo').disabled = false; $('#rqs').textContent = x.message; } };
+  $('#rqf').onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    $('#rqs').textContent = 'Reading ' + file.name + '…';
+    try {
+      if (/\.pdf$/i.test(file.name)) { const b64 = btoa(new Uint8Array(await file.arrayBuffer()).reduce((a, c) => a + String.fromCharCode(c), '')); $('#rq').value = (await api('/api/briefs/extract', { filename: file.name, b64 })).text; }
+      else $('#rq').value = await file.text();
+      $('#rqs').textContent = '';
+    } catch (x) { $('#rqs').textContent = x.message; }
+  };
+}
+function caseStatus(c) {
+  if (c.finished) return ['b-ok', 'Finished'];
+  if (c.stage === 'stopped') return ['b-err', 'Stopped'];
+  if (c.stage === 'duplicate') return ['b-info', 'Same request'];
+  if (c.paused) return ['b-warn', 'Needs an answer'];
+  return ['b-info', 'Working'];
+}
+const CASE_STEPS = ['Read', 'Company', 'Sender', 'Creators', 'Deals', 'Paid'];
+function caseAt(c) {
+  if (c.finished) return 6;
+  return { read: 0, company: 1, creators: 3, deals: 4 }[c.stage] ?? (c.read ? 1 : 0);
+}
+const STEP_WORDS = { read: 'Reading the request line by line', company: 'Checking the company and the sender on Crustdata', creators: 'Ranking creators on evidence, within the private budget', deals: 'Running each deal: pitch, negotiation, contract, re-check, signatures, funds, delivery, payout, invoice' };
+function paintCase(c) {
+  const [cls, label] = caseStatus(c), at = caseAt(c), stopped = STOP_STAGE(c), co = c.company, r = c.read;
+  const tierLine = c.tier_terms ? `<p class="small mt2"><b>Payment terms set by this evidence:</b> ${c.tier_terms.upfront_pct}% held upfront${c.tier_terms.deal_cap ? `, up to ${money(c.tier_terms.deal_cap)} per deal` : ''}.</p>` : '';
+  const creators = c.creators ? `<div class="card"><div class="row between"><h3>Creators, ranked on evidence</h3><span class="tag">Labelled mock accounts</span></div><p class="small muted mt2">${esc(String(c.ranked_total))} matched. Follower count isn't scored. Each creator's lowest price stays private.</p><div class="mt3">${c.creators.map((x, i) => `<div class="req-row ${x.outcome === 'chosen' ? 'chosen' : ''}"><span class="req-rank">${i + 1}</span><div class="grow"><b class="small">@${esc(x.handle)}</b> <span class="small muted">${x.followers != null ? count(x.followers) + ' followers · ' : ''}${esc(x.niche)} · fit ${x.fit}</span><p class="small muted" style="margin:2px 0 0">${esc(x.why)}</p></div><span class="badge ${x.outcome === 'chosen' ? 'b-ok' : 'b-none'}"><i></i>${{ chosen: 'Chosen', no_overlap: 'No price fits both', not_needed: 'Not needed' }[x.outcome]}</span></div>`).join('')}</div></div>` : '';
+  const deals = c.deals?.length ? `<div class="card" id="casedeals"><h3>Deals</h3><div class="mt2">${c.deals.map(d => `<a class="req-row" href="#/deals/${esc(d.id)}"><div class="grow"><b class="small">@${esc(d.handle)}</b><span class="small muted"> · ${esc(STAGE[d.state] || d.state)}${d.price ? ' · ' + money(d.price) : ''}${d.invoice ? ' · invoice ' + esc(d.invoice.number) : ''}</span></div>${dealBadge(d)}</a>`).join('')}</div></div>` : '';
+  view.innerHTML = `<div class="head"><div><p class="cap faint"><a href="#/request">Requests</a> / ${esc(c.id)}</p><h1 style="margin-top:4px">${esc(c.company_name || r?.name || 'New request')}</h1></div><span class="badge ${cls}"><i></i>${esc(label)}</span></div>
+  ${!stopped && !c.paused && !c.finished ? `<div class="card">${working(STEP_WORDS[c.stage] || 'Working', c.stage === 'company')}${c.calls?.length ? `<p class="cap faint mt2">Latest lookup: ${esc(c.calls[c.calls.length - 1].source)}, ${c.calls[c.calls.length - 1].how === 'live' ? `live in ${c.calls[c.calls.length - 1].seconds.toFixed ? c.calls[c.calls.length - 1].seconds.toFixed(1) : c.calls[c.calls.length - 1].seconds}s` : 'from cache'}</p>` : ''}</div>` : ''}
+  <div class="card mt"><div class="pipe">${CASE_STEPS.map((x, i) => `<div class="${stopped && i === at ? 'x' : i < at ? 'd' : i === at && !c.finished ? 'n' : ''}"><i></i>${x}</div>`).join('')}</div></div>
+  ${c.paused ? `<div class="ask mt"><div style="flex:1"><h3>Your answer changes the result</h3><p class="small">${esc(c.paused.question)}</p>${c.paused.retry ? '' : `<div class="answer">${(c.paused.needs || []).map(k => `<input data-need="${esc(k)}" ${k === 'budget' ? 'type="number" min="0" placeholder="Budget in ₹"' : `placeholder="${k === 'company' ? 'Company name or website' : 'For example: skincare'}"`}>`).join('')}</div>`}</div><button class="btn b1" id="caseans">${c.paused.retry ? 'Try again' : 'Continue'}</button></div>` : ''}
+  ${c.stage === 'stopped' ? `<div class="ask bad mt"><div><h3>Stopped, and nothing was started</h3><p class="small">${esc(c.reason)}</p></div></div>` : ''}
+  ${c.stage === 'duplicate' ? `<div class="ask mt" id="casedup"><div><h3>One company, one record</h3><p class="small">${esc(c.reason)}</p></div><a class="btn b2 sm" href="#/request/${esc(c.duplicate_of)}">Open the first request</a></div>` : ''}
+  ${c.finished ? `<div class="ask mt" id="casedone" style="background:var(--ok-bg);border-color:#C6DACB"><div><h3>Finished: ${c.deals.filter(d => d.state === 'done').length} of ${c.deals.length} deals signed, delivered and paid</h3><p class="small">${money(c.deals.reduce((n, d) => n + (d.brand_pays || 0), 0))} settled from a ${money(r.budget)} budget. ${c.shortfall ? esc(c.shortfall) + ' ' : ''}Contracts and invoices are below. Payments and signatures are mocks.</p></div></div>` : ''}
+  <div class="split mt"><div class="stack">
+    ${briefCard(r ? { text: c.text, fields: r.fields, flags: r.flags, missing: r.missing, sha: r.sha } : { text: c.text, fields: [], flags: [], missing: [] }, { title: 'The request, as it came in', note: 'Each detail on the right comes from a highlighted line. Anything not stated stays unknown.' })}
+    ${co ? `<div class="card" id="caseco"><h3>Who is asking?</h3><div class="verdict mt2"><b>${esc(co.name)}${co.domain ? ` <span class="small muted">${esc(co.domain)}</span>` : ''}</b>${verifyBadge(co.status)}</div>${r.sender_name ? `<div class="verdict"><b>${esc(r.sender_name)}${r.sender_email ? ` <span class="small muted">${esc(r.sender_email)}</span>` : ''}</b>${verifyBadge(co.sender_status)}</div>` : ''}<ul class="why">${(co.reasons || []).map(x => `<li>${esc(x)}</li>`).join('')}</ul>${tierLine}<div class="mt3">${factRows([...(co.facts || []), ...(c.facts || [])])}</div></div>` : ''}
+    ${creators}${deals}
+  </div><div class="stack"><div class="card"><h3 style="margin-bottom:var(--s3)">Activity</h3><ul class="time">${(c.log || []).map(l => `<li>${esc(l.text)}<small>${esc(clock(l.at))}</small></li>`).join('')}</ul></div>
+  ${(c.replies || []).length ? `<div class="card"><div class="row between"><h3>Replies sent</h3><span class="tag">Mock outbox</span></div><div class="mt2">${c.replies.map(m => `<details class="mail out"><summary><span class="mail-sub">${esc(m.subject)}</span></summary><p class="cap faint mt2">To ${esc(m.to)}</p><p class="small mt2">${esc(m.body)}</p></details>`).join('')}</div></div>` : ''}</div></div>`;
+}
+const STOP_STAGE = c => c.stage === 'stopped' || c.stage === 'duplicate';
+async function caseRoom(id) {
+  view.innerHTML = spinner('Opening the request…');
+  let last = '', seen = {};
+  const tick = async () => {
+    const c = await api(`/api/requests/${id}`), sig = JSON.stringify(c);
+    if (sig !== last) {
+      last = sig;
+      paintCase(c);
+      const lines = [...view.querySelectorAll('.time li')], rows = [...view.querySelectorAll('.bf-row, .req-row')], done = [...view.querySelectorAll('.pipe .d i')];
+      if (!seen.first) fx.page(view);
+      else { fx.fresh(lines.slice(seen.lines)); fx.fresh(rows.slice(seen.rows)); fx.grow(done.slice(seen.done)); if (seen.stage !== c.stage || seen.finished !== c.finished) fx.arrive(view.querySelector('.ask')); }
+      Object.assign(seen, { first: true, lines: lines.length, rows: rows.length, done: done.length, stage: c.stage, finished: c.finished });
+      if (c.company_id) { S.company = c.company_id; save(); }
+      const go = $('#caseans');
+      if (go) go.onclick = async () => { const values = Object.fromEntries($$('[data-need]').map(i => [i.dataset.need, i.dataset.need === 'budget' ? +i.value : i.value])); if (values.company && /\.[a-z]{2,}/i.test(values.company)) { values.domain = values.company; delete values.company; } await api(`/api/requests/${id}/answer`, values); };
+    }
+    if (location.hash.includes(id) && !c.finished && !STOP_STAGE(c)) S.caseTimer = setTimeout(() => tick().catch(() => {}), 500);
+  };
+  await tick();
+}
 async function brandHome() {
   const co = await loadCompany();
-  if (!co) return onboardBrand();
-  const [all, off] = await Promise.all([api('/api/deals'), api(`/api/companies/${co.id}/applications`)]), mine = all.filter(d => d.company_id === co.id);
+  if (!co) return requestPage();
+  const [all, off, full] = await Promise.all([api('/api/deals'), api(`/api/companies/${co.id}/applications`), api(`/api/companies/${co.id}/brief`)]), mine = all.filter(d => d.company_id === co.id);
   view.innerHTML = `<div class="head"><div><h1>${esc(co.name)}</h1><p class="muted">${co.status === 'blocked' ? 'This company cannot use Avuno.' : 'Verification sets your payment terms. Size never counts against you: evidence does the work.'}${co.also_known_as?.length ? ` Also known as ${esc(co.also_known_as.join(', '))}.` : ''}</p></div>${co.status === 'blocked' ? '' : `<a class="btn b1" href="#/creators">Find creators ${icon('arrow')}</a>`}</div>
   ${co.status === 'blocked' ? `<div class="ask bad"><div><h3>Blocked</h3><p class="small">${esc((co.reasons || []).join(' '))}</p></div></div><div class="mt"></div>` : ''}
   ${off.open.length ? `<div class="ask" style="margin-bottom:var(--s4)"><div><h3>${off.open.length} ${off.open.length === 1 ? 'creator has' : 'creators have'} applied</h3><p class="small">Each comes with a media pack, evidence and a reason.</p></div><a class="btn b1" href="#/offers">Review offers ${icon('arrow')}</a></div>` : ''}
-  <div class="grid g4" style="margin-bottom:var(--s4)">${[['Offers received', off.open.length + off.closed.length], ['Chosen', mine.length], ['Paid', mine.filter(d => d.state === 'done').length], ['Spent (mock)', money(mine.filter(d => d.state === 'done').reduce((n, d) => n + (d.settlement?.brand_pays || 0), 0))]].map(([l, v]) => `<div class="card tile"><div class="l">${l}</div><div class="v num">${v}</div></div>`).join('')}</div>
-  <div class="split"><div class="stack"><div class="card"><div class="row between"><h3>Verification</h3><div class="row" style="gap:6px">${verifyBadge(co.status)}<span class="badge b-none">Tier ${esc(co.tier)}</span></div></div><ul class="why">${(co.reasons || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul></div>${dealList(mine, 'Your deals')}</div>
+  <div class="grid g4" style="margin-bottom:var(--s4)">${[['Offers received', off.open.length + off.closed.length], ['Chosen', full?.budget?.creators_target ? `${mine.length} of ${full.budget.creators_target}` : mine.length], ['Paid', mine.filter(d => d.state === 'done').length], full?.budget?.pool ? ['Creator pool left', money(full.progress.remaining)] : ['Spent (mock)', money(mine.filter(d => d.state === 'done').reduce((n, d) => n + (d.settlement?.brand_pays || 0), 0))]].map(([l, v]) => `<div class="card tile"><div class="l">${l}</div><div class="v num">${v}</div></div>`).join('')}</div>
+  <div class="split"><div class="stack"><div class="card"><div class="row between"><h3>Verification</h3><div class="row" style="gap:6px">${verifyBadge(co.status)}<span class="badge b-none">Tier ${esc(co.tier)}</span></div></div><ul class="why">${(co.reasons || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul></div>
+  ${full?.sha ? briefCard(full) : '<div class="ask"><div><h3>Add your campaign brief</h3><p class="small">You need one before you can choose a creator.</p></div></div>'}
+  ${questionsCard(full)}
+  ${full?.creator_brief ? `<details class="card"><summary>What creators read</summary><div class="mt3">${creatorDoc(full.creator_brief)}</div></details>` : ''}
+  <details class="card flat"><summary>${full?.sha ? 'Change the brief' : 'Add the brief'}</summary><textarea id="nb" rows="7" class="mt3">${esc(full?.text || '')}</textarea><button class="btn b1 sm mt3" id="nbs">Save brief</button></details>
+  ${dealList(mine, 'Your deals')}</div>
   <div class="stack"><div class="card evidence-card"><h3>Evidence</h3><div class="mt2">${factRows(co.facts)}</div></div><button class="btn b2" id="reset">Register another company</button></div></div>`;
   $('#reset').onclick = () => { S.company = null; route(); };
+  $('#nbs').onclick = async () => { try { await api(`/api/companies/${co.id}/brief`, { text: $('#nb').value }); toast('Brief saved.'); route(); } catch (e) { toast(e.message); } };
 }
 function onboardBrand() {
   view.innerHTML = `<div class="onb" style="align-items:start"><div><p class="cap" style="letter-spacing:.14em;color:var(--ochre-deep)">FOR BRANDS, SMALL OR BIG</p><h1 class="hero-title mt2">Creator campaigns without an agency.</h1><p class="muted mt" style="font-size:16px;max-width:520px">Find creators on evidence, not follower count. Clear contracts, and your money is only released when you approve the work. Any size of brand, with or without a website.</p>
   <div class="card flat mt5"><h3>Paste a request instead</h3><p class="small muted mt2">However messy. We fill the form, and flag what's missing rather than guessing.</p><textarea id="brief" class="mt3" rows="3" placeholder="need 2 reels for our snack launch, budget 30k, 60 day usage. Thanks, Neha Jain neha@snackly.in"></textarea><button class="btn b3 sm mt3" id="rb" type="button">Read this request</button><p class="small muted mt2" id="rbo"></p></div></div>
   <form class="card" id="f"><h2 style="font-size:26px;margin-bottom:var(--s4)">Verify your company</h2><label class="f"><span>Company name</span><input name="name" required></label><label class="f"><span>What you sell <small>(in your own words)</small></span><input name="niche" required placeholder="e.g. millet snacks, herbal skincare"></label><label class="f"><span>Website or domain <small>(optional)</small></span><input name="domain" placeholder="yourbrand.in"></label>
   <div class="grid g2"><label class="f"><span>Your name</span><input name="sender_name"></label><label class="f"><span>Work email</span><input name="sender_email" type="email"></label></div><div class="grid g2"><label class="f"><span>Instagram <small>(if no website)</small></span><input name="instagram" placeholder="@yourbrand"></label><label class="f"><span>GSTIN <small>(lookup is mocked)</small></span><input name="gstin"></label></div><label class="f"><span>Budget, ₹ <small>(private, never shown to creators)</small></span><input name="budget" type="number" min="0" required></label>
+  <label class="f"><span>Campaign brief <small>(required. Creators read this before applying)</small></span><textarea name="campaign_brief" rows="7" required minlength="30" placeholder="Objective, deliverables, key message, dos and don'ts, timeline"></textarea></label>
+  <div class="row" style="margin-bottom:var(--s3);gap:var(--s2)"><label class="btn b2 sm" style="cursor:pointer">Upload PDF, .txt or .md<input type="file" id="bf" accept=".pdf,.txt,.md,application/pdf,text/plain,text/markdown" hidden></label><button type="button" class="btn b3 sm" id="bs2">Use the sample brief</button><a class="small" href="/api/demo/sample-brief.pdf" target="_blank" rel="noopener">See an example</a></div><div id="bfo"></div>
   <button class="btn b1" style="width:100%">Verify ${icon('shield')}</button><p class="cap faint mt3" id="st"></p></form></div>`;
+  const showRead = r => {
+    const f = $('#f').elements;
+    f.campaign_brief.value = r.text ?? f.campaign_brief.value;
+    if (r.client && !f.name.value) f.name.value = r.client;
+    if (r.product && !f.niche.value) f.niche.value = r.product.replace(/\(.*?\)/g, '').split('—').pop().trim();
+    if (r.cap && !f.budget.value) f.budget.value = r.cap;
+    $('#bfo').innerHTML = `<p class="small" style="margin-bottom:var(--s3)"><b>Read ${r.details_found} details${r.pages ? ` from ${r.pages} pages` : ''}.</b> ${r.missing.length ? `Not stated: ${esc(r.missing.join(', '))}.` : 'Nothing essential is missing.'}</p>`;
+  };
+  $('#bf').onchange = async e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    $('#bfo').innerHTML = `<div style="margin-bottom:var(--s3)">${working('Reading ' + file.name)}</div>`;
+    try {
+      if (/\.pdf$/i.test(file.name)) {
+        const b64 = btoa(new Uint8Array(await file.arrayBuffer()).reduce((a, c) => a + String.fromCharCode(c), ''));
+        showRead(await api('/api/briefs/extract', { filename: file.name, b64 }));
+      } else { const text = await file.text(); showRead({ text, ...(await api('/api/briefs/preview', { text })) }); }
+    } catch (x) { $('#bfo').innerHTML = `<p class="small" style="margin-bottom:var(--s3);color:var(--err)">${esc(x.message)}</p>`; }
+  };
+  $('#bs2').onclick = async () => { $('#bfo').innerHTML = `<div style="margin-bottom:var(--s3)">${working('Reading the sample brief')}</div>`; showRead(await api('/api/demo/sample-brief')); };
   $('#rb').onclick = async () => { const b = await api('/api/briefs', { text: $('#brief').value }), f = $('#f').elements; if (b.brand) f.name.value = b.brand; if (b.budget) f.budget.value = b.budget; if (b.niche) f.niche.value = b.niche; if (b.email) { f.sender_email.value = b.email; f.domain.value = /(gmail|yahoo|outlook|hotmail)\./.test(b.email) ? '' : b.email.split('@')[1]; } if (b.sender_name) f.sender_name.value = b.sender_name; $('#rbo').textContent = b.missing.length ? `Still missing: ${b.missing.join(', ')}.` : 'All required fields found.'; };
-  $('#f').onsubmit = async e => { e.preventDefault(); const f = Object.fromEntries([...new FormData(e.target)].filter(([, v]) => v !== '')); f.budget = +f.budget; const b = e.target.querySelector('button'); b.disabled = true; $('#st').innerHTML = '<span class="spin"></span> Checking live sources…'; try { const co = await api('/api/companies', f); S.company = co.id; S.role = 'brand'; route(); } catch (x) { b.disabled = false; $('#st').textContent = x.message; } };
+  $('#f').onsubmit = async e => { e.preventDefault(); const f = Object.fromEntries([...new FormData(e.target)].filter(([, v]) => v !== '')); f.budget = +f.budget; const b = e.target.querySelector('button'); b.disabled = true; $('#st').innerHTML = working('Reading your brief and checking live sources', true); try { const co = await api('/api/companies', f); S.company = co.id; S.role = 'brand'; route(); } catch (x) { b.disabled = false; $('#st').textContent = x.message; } };
 }
 async function creators() {
   const co = await loadCompany();
@@ -212,7 +313,7 @@ async function creators() {
 }
 
 /* Deals */
-const STAGE = { verify: 'Verify', pitch: 'Pitch', await_company: 'Reply', negotiate: 'Negotiate', contract: 'Contract', recheck: 'Re-check', sign: 'Sign', fund: 'Funds held', deliver: 'Deliver', approve: 'Approve', release: 'Release', invoice: 'Invoice', done: 'Paid' };
+const STAGE = { verify: 'Verify', read_brief: 'Read brief', pitch: 'Pitch', await_company: 'Reply', negotiate: 'Negotiate', contract: 'Contract', recheck: 'Re-check', sign: 'Sign', fund: 'Funds held', deliver: 'Deliver', approve: 'Approve', release: 'Release', invoice: 'Invoice', done: 'Paid' };
 const ORDER = Object.keys(STAGE);
 function dealList(list, title) {
   if (!list.length) return `<div class="card"><h3>${title}</h3><p class="small faint mt2">No deals yet.</p></div>`;
@@ -245,7 +346,7 @@ async function runScenario(kind) {
     location.hash = `#/deals/${d.id}`;
   } catch (e) { $('#sco').textContent = e.message; }
 }
-const EVENTS = { signature: 'Contract signed by the company (mock)', terms_compared: e => `Compared ${e.data.count} versions of this deal`, data_call: e => `Crustdata ${e.data.source}: ${e.data.how === 'live' ? `live, ${e.data.seconds}s` : 'from cache'}`, deal_started: 'Deal started', step_done: e => `${STAGE[e.data.step] || e.data.step} finished`, message_queued: e => `Message queued to mock outbox: ${e.data.subject}`, simulated_company_replied: 'Simulated company replied', terms_agreed: e => `Terms agreed at ${money(e.data.price)}`, terms_reduced: 'Requested terms did not fit, so lighter terms were agreed', recheck_passed: 'Pre-signing re-check passed', paused: e => e.data.question || 'Waiting', person_decided: e => `A person answered: ${e.data.approve ? 'yes' : 'no'}`, crashed: e => `Process crashed after ${STAGE[e.data.after] || e.data.after} (simulated)`, blocked: e => `Blocked: ${e.data.reason}`, no_deal: e => `No deal: ${e.data.reason}`, tool_failure: 'A data source failed; the deal is saved', delivery: 'Delivery received', approval: 'Delivery approved', company_response: 'Company responded' };
+const EVENTS = { budget_checked: "Checked against the brand's private creator budget", brief_field: e => `Read from the brief: ${e.data.label}`, brief_read: e => `Campaign brief read: ${e.data.fields} details, ${e.data.flags} ${e.data.flags === 1 ? 'flag' : 'flags'}`, signature: 'Contract signed by the company (mock)', terms_compared: e => `Compared ${e.data.count} versions of this deal`, data_call: e => `Crustdata ${e.data.source}: ${e.data.how === 'live' ? `live, ${e.data.seconds}s` : 'from cache'}`, deal_started: 'Deal started', step_done: e => `${STAGE[e.data.step] || e.data.step} finished`, message_queued: e => `Message queued to mock outbox: ${e.data.subject}`, simulated_company_replied: 'Simulated company replied', terms_agreed: e => `Terms agreed at ${money(e.data.price)}`, terms_reduced: 'Requested terms did not fit, so lighter terms were agreed', recheck_passed: 'Pre-signing re-check passed', paused: e => e.data.question || 'Waiting', person_decided: e => `A person answered: ${e.data.approve ? 'yes' : 'no'}`, crashed: e => `Process crashed after ${STAGE[e.data.after] || e.data.after} (simulated)`, blocked: e => `Blocked: ${e.data.reason}`, no_deal: e => `No deal: ${e.data.reason}`, tool_failure: 'A data source failed; the deal is saved', delivery: 'Delivery received', approval: 'Delivery approved', company_response: 'Company responded' };
 const KIND = { mock_email: 'Message', contract_issued: 'Contract issued', mock_signature: 'Signature', mock_funds_held: 'Funds held', mock_balance_charged: 'Balance charged', mock_payout: 'Payout', mock_fee: 'Avuno fee', invoice: 'Invoice', exclusivity_reserved: 'Exclusivity reserved' };
 
 async function dealRoom(id) {
@@ -254,47 +355,83 @@ async function dealRoom(id) {
   const events = [], seen = {};
   const load = async () => {
     const d = await api(`/api/deals/${id}`);
-    if (!ctx) { const [co, cs] = await Promise.all([api(`/api/companies/${d.company_id}`), Promise.all(d.creator_ids.map(c => api(`/api/creators/${c}`)))]); ctx = { co, cs }; }
+    if (!ctx) { const [co, cs, full] = await Promise.all([api(`/api/companies/${d.company_id}`), Promise.all(d.creator_ids.map(c => api(`/api/creators/${c}`))), S.role === 'brand' ? api(`/api/companies/${d.company_id}/brief`) : Promise.resolve(null)]); ctx = { co, cs, full }; }
+    else if (S.role === 'brand' && !ctx.full?.sha) ctx.full = await api(`/api/companies/${d.company_id}/brief`);
     paintDeal(d, ctx, events);
     wireDeal(d, id, ctx);
     // First paint animates the page. After that, only what changed moves, so the agent's progress is what you notice.
-    const lines = [...view.querySelectorAll('.time li, .thread .mail')], done = [...view.querySelectorAll('.pipe .d i')], attention = d.paused?.kind || d.state;
+    const lines = [...view.querySelectorAll('.time li, .thread .mail')], rows = [...view.querySelectorAll('.bf-row')], done = [...view.querySelectorAll('.pipe .d i')], attention = d.paused?.kind || d.state;
     if (!seen.first) fx.page(view);
     else {
       fx.fresh(lines.slice(seen.lines));
+      fx.fresh(rows.slice(seen.rows));
       fx.grow(done.slice(seen.done));
       if (attention !== seen.attention) fx.arrive(view.querySelector('.ask'));
       if (d.settlement && !seen.price) { const h = view.querySelector('.hero-num'); fx.arrive(h?.closest('.card')); if (h) fx.count(h, 0.1); }
     }
-    Object.assign(seen, { first: true, lines: lines.length, done: done.length, attention, price: !!d.settlement });
+    Object.assign(seen, { first: true, rows: rows.length, lines: lines.length, done: done.length, attention, price: !!d.settlement });
   };
   await load();
   S.es = new EventSource(`/api/deals/${id}/events`);
   S.es.onmessage = m => { events.push(JSON.parse(m.data)); clearTimeout(timer); timer = setTimeout(() => { if (location.hash.includes(id)) load().catch(() => {}); }, 120); };
   S.es.onerror = () => { if (S.es) { S.es.close(); S.es = null; } };
 }
-function paintDeal(d, { co, cs }, events) {
+function dealBrief(d, full, events) {
+  if (full?.sha) {
+    const revealed = events.filter(e => e.type === 'brief_field').map(e => e.data.key);
+    const reading = !d.brief;
+    return briefCard({ ...full, fields: reading ? full.fields.filter(f => revealed.includes(f.key)) : full.fields, flags: reading ? [] : (d.brief.flags || []).concat((full.flags || []).filter(f => f.private)), missing: reading ? [] : full.missing });
+  }
+  if (d.brief?.is_mock) return briefCard({ ...d.brief, text: null }, { title: 'Campaign brief', note: 'This brand has no brief yet, so a labelled placeholder is used for this simulated deal.' });
+  return d.brief ? `<details class="card"><summary>Creator brief</summary><div class="mt3">${creatorDoc(d.brief.creator_brief)}</div></details>` : '';
+}
+function paintDeal(d, { co, cs, full: ctxFull }, events) {
   const at = ORDER.indexOf(d.state), final = ['blocked', 'no_deal'].includes(d.state), s = d.settlement, t = s?.terms;
   const last = events.filter(e => e.type === 'step_done').pop(); const reached = final ? ORDER.indexOf(last?.data.next || 'verify') : at;
   const crashed = events.some(e => e.type === 'crashed') && !events.slice(events.findIndex(e => e.type === 'crashed') + 1).some(e => e.type === 'step_done');
   const open = view.querySelector('details[data-k]')?.open;
   const pays = (d.actions || []).filter(a => a.kind === 'mock_payout').length;
   view.innerHTML = `<div class="head"><div><p class="cap faint"><a href="#/deals">Deals</a> / ${esc(d.id)}</p><h1 style="margin-top:4px">${esc(co.name)} × ${cs.map(c => '@' + esc(c.handle)).join(', ')}</h1></div>${crashed ? '<span class="badge b-err"><i></i>Crashed</span>' : dealBadge(d)}</div>
-  ${liveBar(d, events, crashed, final)}<div class="card mt"><div class="pipe">${ORDER.map((x, i) => `<div class="${final && i === reached ? 'x' : i < reached || d.state === 'done' ? 'd' : i === reached ? 'n' : ''}"><i></i>${STAGE[x]}</div>`).join('')}</div></div>
+  ${liveBar(d, events, crashed, final, co)}<div class="card mt"><div class="pipe">${ORDER.map((x, i) => `<div class="${final && i === reached ? 'x' : i < reached || d.state === 'done' ? 'd' : i === reached ? 'n' : ''}"><i></i>${STAGE[x]}</div>`).join('')}</div></div>
   ${crashed ? `<div class="ask bad mt"><div><h3>The process crashed mid-step</h3><p class="small">Actions may already have run, but the step was not saved. Resuming must not repeat any of them.</p></div><button class="btn b1" id="resume">Resume deal</button></div>` : ''}
   ${d.paused?.question ? `<div class="ask mt"><div><h3>Your answer changes the result</h3><p class="small">${esc(d.paused.question)}</p></div><div class="row"><button class="btn b1 sm" id="yes">Continue</button><button class="btn b2 sm" id="no">Stop deal</button></div></div>` : ''}
   ${d.paused && !d.paused.question ? `<div class="ask mt"><div><h3>${esc({ company_response: 'Waiting for the company', delivery: 'Waiting for delivery', approval: 'Waiting for approval', signature: 'Ready to sign', own_contract: 'Add your contract' }[d.paused.kind] || 'Waiting')}</h3><p class="small">${esc({ company_response: 'The company needs to respond.', delivery: 'The creator posts the content, then marks it delivered.', approval: 'The company reviews the post, then approves it to release payment.', own_contract: 'You chose to use your own contract. Paste it below. It must still cover ad disclosure. The agreed terms are shown on this page.', signature: 'The facts were re-checked just now, and the evidence for each party is below. Read the contract, then sign. This signature is a mock.' }[d.paused.kind] || d.paused.kind)}</p></div>${['company_response', 'own_contract'].includes(d.paused.kind) ? '' : `<button class="btn b1" id="act" data-a="${esc(d.paused.kind)}">${esc({ delivery: 'Mark delivered', approval: 'Approve delivery', signature: 'Sign contract' }[d.paused.kind])}</button>`}</div>` : ''}
   ${d.paused?.kind === 'own_contract' ? `<div class="card mt"><label class="f"><span>Your contract</span><textarea id="ownc" rows="9" placeholder="Paste the full contract text"></textarea></label><button class="btn b1" id="ownsave">Use this contract</button></div>` : ''}
   ${d.final_reason ? `<div class="ask bad mt"><div><h3>${d.state === 'blocked' ? 'Blocked, and nothing was sent' : 'No deal'}</h3><p class="small">${esc(d.final_reason)}</p></div></div>` : ''}
   ${d.state === 'done' ? `<div class="ask mt" style="background:var(--ok-bg);border-color:#C6DACB"><div><h3>Finished: contract signed, money released, invoice issued</h3><p class="small">${pays} payout${pays === 1 ? '' : 's'} made, exactly once${events.some(e => e.type === 'crashed') ? ', even after the crash' : ''}. Payments and signatures are mocks.</p></div></div>` : ''}
+  ${d.paused?.kind === 'campaign_brief' ? `<div class="card mt"><h3>This brand needs a campaign brief</h3><p class="small muted mt2">Creators need something to read, and the agent needs something to check. Paste it here to continue.</p><textarea id="dealbrief" rows="8" class="mt3" placeholder="Objective, deliverables, key message, dos and don'ts, timeline"></textarea><button class="btn b1 mt3" id="dealbriefsave">Use this brief</button></div>` : ''}
   <div class="split mt"><div class="stack">
+    ${dealBrief(d, ctxFull, events)}
     ${s ? `<div class="card"><p class="small muted">Agreed price</p><div class="hero-num num mt2">${money(s.price)}</div><p class="tie">${esc(s.rule)}</p><div class="mt3"><div class="kv"><span>Brand pays</span><b class="num">${money(s.brand_pays)}</b></div>${Object.entries(s.creator_net).map(([c, n]) => `<div class="kv"><span>@${esc(cs.find(x => x.id === c)?.handle || c)} nets</span><b class="num">${money(n)}</b></div>`).join('')}<div class="kv"><span>Avuno fee (disclosed, 5% each side)</span><b class="num">${money(s.fee_brand + s.fee_creators)}</b></div><div class="kv"><span>Deliverables</span><b>${t.reels} reel, ${t.stories} stories${cs.length > 1 ? ' each' : ''}</b></div><div class="kv"><span>Usage</span><b>${t.usage_days} days${t.paid_ads ? ', paid ads' : ''}</b></div><div class="kv"><span>Exclusivity</span><b>${t.exclusivity_days ? t.exclusivity_days + ' days' : 'None'}</b></div>${d.tier_terms ? `<div class="kv"><span>Held upfront</span><b>${d.tier_terms.upfront_pct}% (${esc(d.tier_terms.label)})</b></div>` : ''}</div>${d.terms_reduced ? `<p class="small mt2">${esc(d.terms_reduced)}</p>` : ''}</div>` : ''}
     <div class="card"><div class="row between"><h3>Who is ${esc(co.name)}?</h3>${verifyBadge(co.status)}</div><ul class="why">${(co.reasons || []).map(r => `<li>${esc(r)}</li>`).join('')}</ul><div class="mt3">${factRows([...(co.facts || []), ...(d.facts || [])])}</div></div>
     ${d.recheck ? `<div class="card"><div class="row between"><h3>Re-check before signing</h3>${d.recheck.changed ? '<span class="badge b-warn"><i></i>Changed</span>' : '<span class="badge b-ok"><i></i>No change</span>'}</div><p class="small muted mt2">${esc(d.recheck.detail)} ${esc(day(d.recheck.at))}</p></div>` : ''}
     ${threadCard(d)}
+    ${d.invoice ? `<div class="card" id="invoice"><div class="row between"><h3>Invoice ${esc(d.invoice.number)}</h3><span class="tag">Mock</span></div><div class="mt3"><div class="kv"><span>Bill to</span><b>${esc(d.invoice.bill_to)}</b></div><div class="kv"><span>Creator services</span><b class="num">${money(d.invoice.services)}</b></div><div class="kv"><span>Avuno fee (5%)</span><b class="num">${money(d.invoice.broker_fee)}</b></div><div class="kv"><span>Total</span><b class="num">${money(d.invoice.total)}</b></div></div><p class="cap faint mt2">${esc(d.invoice.tax_note)}</p></div>` : ''}
     ${d.contract_hash ? `<details class="card" data-k ${open ? 'open' : ''}><summary>Contract${d.contract_source ? ` · ${esc(d.contract_source)}` : ''}${d.tracking_code ? ` · Tracking code ${esc(d.tracking_code)}` : ''}</summary><p class="cap faint mt2">SHA-256 <span class="mono">${esc(d.contract_hash)}</span></p><pre class="doc">${esc(d.contract_text)}</pre></details>` : ''}
   </div><div class="stack"><div class="card"><h3 style="margin-bottom:var(--s3)">Activity</h3><ul class="time">${events.length ? events.filter(e => e.type !== 'step_started' && (APP.show_data_calls || e.type !== 'data_call')).map(e => { const m = EVENTS[e.type]; return `<li class="${['crashed', 'blocked', 'no_deal'].includes(e.type) ? 'e' : e.type === 'paused' ? 'w' : ''}">${esc(typeof m === 'function' ? m(e) : m || e.type)}<small>${esc(clock(e.ts))}</small></li>`; }).join('') : '<li class="w">Waiting for the first step…</li>'}</ul></div>
   <div class="card"><div class="row between"><h3>Action ledger</h3><span class="tag">Mock</span></div><p class="cap faint mt2">Each action has a unique key, so it can only happen once.</p><div class="mt2">${(d.actions || []).map(a => `<div class="kv small"><span>${esc(KIND[a.kind] || a.kind)}</span><b class="num">${a.payload.amount != null ? money(a.payload.amount) : a.payload.total != null ? money(a.payload.total) : ''}</b></div>`).join('') || '<p class="faint small">Nothing has happened yet.</p>'}</div></div></div></div>`;
+}
+function creatorDoc(cb, opts = {}) {
+  if (!cb) return '';
+  const sec = x => {
+    if (x.key === 'must_not') return `<div class="doc-note no"><b>${esc(x.label).toUpperCase()}</b><ul>${x.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div>`;
+    if (x.key === 'disclosure') return `<div class="doc-note ok"><b>${esc(x.label).toUpperCase()}</b><p>${esc(x.items.join(' '))}</p></div>`;
+    return `<h4>${esc(x.label)}</h4>${x.items.length > 1 ? `<ul>${x.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul>` : `<p>${esc(x.items[0])}</p>`}`;
+  };
+  return `<article class="doc" aria-label="Creator brief"><div class="doc-top"><b>AVUNO</b> / CREATOR BRIEF</div>${cb.client ? `<div class="doc-client">${esc(cb.client)}</div>` : ''}<h2>${esc(cb.title)}</h2><div class="doc-sub">${opts.note ? esc(opts.note) : "Made from the brand's confidential document. Budget and internal details are removed."}</div>${cb.sections.map(sec).join('')}</article>`;
+}
+function briefCard(b, opts = {}) {
+  if (!b) return '';
+  const hits = new Set((b.fields || []).flatMap(f => f.lines || []));
+  const doc = b.text ? `<div class="brief-doc" aria-label="Campaign brief text">${b.text.replace(/\r/g, '').split('\n').map((l, i) => `<div class="${hits.has(i) ? 'hit' : ''}">${esc(l) || '&nbsp;'}</div>`).join('')}</div>` : '';
+  const rows = (b.fields || []).map(f => `<div class="bf-row ${f.private ? 'priv' : ''}"><b>${esc(f.label)}</b><span>${esc(f.value.length > 170 ? f.value.slice(0, 170) + '…' : f.value)}</span></div>`).join('') || '<p class="small faint">Reading…</p>';
+  const flags = (b.flags || []).map(f => `<div class="bf-flag ${esc(f.severity)}">${esc(f.text)}</div>`).join('');
+  const missing = b.missing?.length ? `<div class="bf-flag info">Not stated: ${esc(b.missing.join(', '))}.</div>` : '';
+  return `<div class="card brief-card"><div class="row between"><h3>${esc(opts.title || 'Campaign brief, as the agent read it')}</h3>${b.is_mock ? '<span class="tag">Placeholder, mock</span>' : b.sha ? `<span class="cap faint mono">${esc(b.version || '')} ${esc(b.sha.slice(0, 12))}</span>` : ''}</div><p class="small muted mt2">${esc(opts.note || 'Confidential to the brand. Each detail on the right comes from a highlighted line.')}</p><div class="brief"><div>${doc}</div><div>${rows}${missing}${flags}</div></div>${opts.after || ''}</div>`;
+}
+function questionsCard(b) {
+  if (!b?.open_questions?.length) return '';
+  return `<div class="card"><h3>Open questions in your brief</h3><p class="small muted mt2">Unanswered in your document. These are proposed defaults, and none are assumed silently.</p><div class="mt3">${b.open_questions.map(q => `<div class="q-row"><b>${esc(q.id)}. ${esc(q.question)}</b><small>Proposed: ${esc(q.default)}</small></div>`).join('')}</div></div>`;
 }
 function threadCard(d) {
   const mails = d.thread || [];
@@ -302,14 +439,16 @@ function threadCard(d) {
   const last = mails[mails.length - 1].day;
   return `<div class="card"><div class="row between"><h3>Email thread</h3><span class="tag">Mock</span></div><p class="small muted mt2">So far this is about <b>${last} ${last === 1 ? 'day' : 'days'}</b> of email in a real deal (our estimate), compressed here. Nothing reaches anyone real, and replies from the other side are simulated.</p><div class="thread mt3">${mails.map(m => `<details class="mail ${m.from === 'Avuno' ? 'out' : 'in'}"><summary><span class="daychip">Day ${m.day}</span><span class="mail-who">${esc(m.from)}</span><span class="mail-sub">${esc(m.subject)}</span>${m.simulated_reply ? '<span class="tag">Simulated</span>' : ''}</summary><p class="cap faint mt2">To ${esc(m.to)}</p><p class="small mt2" style="white-space:pre-wrap">${esc(m.body)}</p></details>`).join('')}</div></div>`;
 }
-const STEP_TEXT = { verify: ['Checking the company and pulling its current data', 1], pitch: ['Emailing the pitch to the person found on Crustdata (mock outbox)', 0], await_company: ['Waiting for the company\'s reply', 0], negotiate: ['Negotiating by email, comparing versions of the deal within both private limits', 0], contract: ['Drafting the contract and sealing it with a hash', 0], recheck: ['Re-checking the facts live before anyone signs', 1], sign: ['Collecting signatures', 0], fund: ['Holding funds (mock)', 0], deliver: ['Waiting for delivery', 0], approve: ['Waiting for approval', 0], release: ['Releasing money to each party, exactly once (mock)', 0], invoice: ['Issuing the invoice', 0] };
-function liveBar(d, events, crashed, final) {
+const STEP_TEXT = { verify: ['Checking the company and pulling its current data', 1], read_brief: ['Reading the campaign brief line by line and checking it against the rules', 0], pitch: ['Emailing the pitch to the person found on Crustdata (mock outbox)', 0], await_company: ['Waiting for the company\'s reply', 0], negotiate: ['Negotiating by email, comparing versions of the deal within both private limits', 0], contract: ['Drafting the contract and sealing it with a hash', 0], recheck: ['Re-checking the facts live before anyone signs', 1], sign: ['Collecting signatures', 0], fund: ['Holding funds (mock)', 0], deliver: ['Waiting for delivery', 0], approve: ['Waiting for approval', 0], release: ['Releasing money to each party, exactly once (mock)', 0], invoice: ['Issuing the invoice', 0] };
+function liveBar(d, events, crashed, final, co) {
   if (final || crashed || d.paused || d.state === 'done') return '';
-  const [text, live] = STEP_TEXT[d.state] || ['Working', 0];
+  const [text, isLookup] = STEP_TEXT[d.state] || ['Working', 0];
+  const live = isLookup && (co?.domain || co?.company_id);      // Only claim a lookup when one can actually happen.
   const last = [...events].reverse().find(e => e.type === 'data_call');
   return `<div class="card">${working(text, live)}${live && last ? `<p class="cap faint mt2">Latest lookup: ${esc(last.data.source)}, ${last.data.how === 'live' ? `live in ${last.data.seconds}s` : 'from cache'}</p>` : ''}${d.pace_ms ? '<p class="cap faint mt2">Steps are slowed so you can follow them. Change this in Settings.</p>' : ''}</div>`;
 }
 function wireDeal(d, id) {
+  if ($('#dealbriefsave')) $('#dealbriefsave').onclick = async () => { try { await api(`/api/deals/${id}/brief`, { text: $('#dealbrief').value }); route(); } catch (e) { toast(e.message); } };
   if ($('#ownsave')) $('#ownsave').onclick = async () => { try { await api(`/api/deals/${id}/own-contract`, { text: $('#ownc').value }); route(); } catch (e) { toast(e.message); } };
   if ($('#act')) $('#act').onclick = async () => { await api(`/api/deals/${id}/${{ delivery: 'deliver', approval: 'approve', signature: 'sign' }[$('#act').dataset.a]}`, $('#act').dataset.a === 'delivery' ? [] : {}); route(); };
   const answer = async ok => { await api(`/api/deals/${id}/decide`, { approve: ok }); route(); };
@@ -345,7 +484,7 @@ async function applicationsPage() {
   if (!S.creator) { location.hash = '#/home'; return; }
   const [list, st] = await Promise.all([api(`/api/creators/${S.creator}/applications`), api(`/api/settings/creator/${S.creator}`)]);
   view.innerHTML = `<div class="head"><div><h1>Applications</h1><p class="muted">${st.auto_deal ? 'Auto Deal is on, so eligible brands get your Standard pack automatically.' : 'Packs you have sent to brands.'}</p></div><a class="btn b1" href="#/brands">Find brands ${icon('arrow')}</a></div>
-  ${list.length ? `<div class="stack">${list.map(a => { const [c, l] = APP_STATUS[a.status]; return `<article class="card"><div class="row between"><div><h3>${esc(a.company_name)}</h3><p class="cap faint">${esc(a.pack)} pack · ${a.terms.reels} reel, ${a.terms.stories} stories, ${a.terms.usage_days} days usage${a.source === 'auto' ? ' · <span class="tag">Sent by Auto Deal</span>' : ''}</p></div><span class="badge ${c}"><i></i>${l}</span></div><p class="whyline">${esc(a.why_brand)}</p>${a.note ? `<p class="small muted mt2">${esc(a.note)}</p>` : ''}${a.deal_id ? `<a class="btn b2 sm mt3" href="#/deals/${esc(a.deal_id)}">Open deal ${icon('arrow')}</a>` : ''}</article>`; }).join('')}</div>` : '<div class="card empty"><h2>Nothing sent yet</h2><p class="muted mt2">Open a brand\'s media packs and apply, or turn on Auto Deal.</p></div>'}`;
+  ${list.length ? `<div class="stack">${list.map(a => { const [c, l] = APP_STATUS[a.status]; return `<article class="card"><div class="row between"><div><h3>${esc(a.company_name)}</h3><p class="cap faint">${esc(a.pack)} pack · ${a.terms.reels} reel, ${a.terms.stories} stories, ${a.terms.usage_days} days usage${a.source === 'auto' ? ' · <span class="tag">Sent by Auto Deal</span>' : ''}${a.brief_sha ? ' · Brief available' : ' · No brief yet'}</p></div><span class="badge ${c}"><i></i>${l}</span></div><p class="whyline">${esc(a.why_brand)}</p>${a.note ? `<p class="small muted mt2">${esc(a.note)}</p>` : ''}${a.deal_id ? `<a class="btn b2 sm mt3" href="#/deals/${esc(a.deal_id)}">Open deal ${icon('arrow')}</a>` : ''}</article>`; }).join('')}</div>` : '<div class="card empty"><h2>Nothing sent yet</h2><p class="muted mt2">Open a brand\'s media packs and apply, or turn on Auto Deal.</p></div>'}`;
 }
 
 /* Offers, for brands */
@@ -354,12 +493,13 @@ async function offersPage() {
   if (!co) { location.hash = '#/home'; return; }
   const r = await api(`/api/companies/${co.id}/applications`);
   view.innerHTML = `<div class="head"><div><h1>Offers for ${esc(co.name)}</h1><p class="muted">Ranked on fit and evidence, not follower count. Your budget stays private, and so do their limits.${r.hidden ? ` ${r.hidden} below your minimum fit ${r.hidden === 1 ? 'is' : 'are'} hidden.` : ''}</p></div></div>
-  ${r.open.length ? `<div class="stack">${r.open.map(x => `<article class="card"><div class="row between" style="align-items:flex-start"><div class="row"><div class="avatar sm">${initial(x.handle)}</div><div><h3>${x.rank}. @${esc(x.handle)}</h3><p class="cap faint">${esc(x.niche)}${x.is_mock ? ' · <span class="tag">Mock</span>' : ''}${x.source === 'auto' ? ' · Sent by Auto Deal' : ''}</p></div></div><div class="row"><button class="btn b2 sm" data-no="${esc(x.id)}">Pass</button><button class="btn b1 sm" data-yes="${esc(x.id)}">Choose ${icon('arrow')}</button></div></div>
+  ${co.brief ? '' : `<div class="ask" style="margin-bottom:var(--s4)"><div><h3>Add your campaign brief first</h3><p class="small">You can't choose a creator until they have something to read.</p></div><a class="btn b1" href="#/home">Add brief</a></div>`}
+  ${r.open.length ? `<div class="stack">${r.open.map(x => `<article class="card"><div class="row between" style="align-items:flex-start"><div class="row"><div class="avatar sm">${initial(x.handle)}</div><div><h3>${x.rank}. @${esc(x.handle)}</h3><p class="cap faint">${esc(x.niche)}${x.is_mock ? ' · <span class="tag">Mock</span>' : ''}${x.source === 'auto' ? ' · Sent by Auto Deal' : ''}</p></div></div><div class="row"><button class="btn b2 sm" data-no="${esc(x.id)}">Pass</button><button class="btn b1 sm" data-yes="${esc(x.id)}" ${co.brief ? '' : 'disabled'}>Choose ${icon('arrow')}</button></div></div>
   <div class="stats3 mt"><div><b class="num">${count(x.followers)}</b><span>Followers</span></div><div><b class="num">${pct(x.engagement_rate)}</b><span>Engagement</span></div><div><b class="num">${money(x.list_price_estimate)}</b><span>Est. price</span></div></div>
   <p class="small muted mt3">${esc(x.pack)} pack: ${x.terms.reels} reel, ${x.terms.stories} stories, ${x.terms.usage_days} days usage${x.terms.exclusivity_days ? `, ${x.terms.exclusivity_days} days exclusive` : ''}</p>
-  <div class="row mt" style="gap:var(--s4)">${meter('Fit', x.fit)}${meter('Confidence', x.confidence, 'c')}</div><p class="whyline">${esc(x.why)}</p><details class="ev"><summary>Evidence</summary><ul class="why">${x.reasons.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>${x.decided_by ? `<p class="tie">Ranked above next: ${esc(x.decided_by)}</p>` : ''}</article>`).join('')}</div>` : '<div class="card empty"><h2>No open offers</h2><p class="muted mt2">When creators apply to you, they appear here ranked.</p></div>'}
+  <div class="row mt" style="gap:var(--s4)">${meter('Fit', x.fit)}${meter('Confidence', x.confidence, 'c')}</div>${x.brief_checks?.length ? `<div class="checks" aria-label="Checked against your brief">${x.brief_checks.map(c => `<span class="check ${esc(c.status)}">${{ pass: '✓', partial: '~', fail: '✕', unknown: '?' }[c.status]} ${esc(c.label)}: ${esc(c.detail)}</span>`).join('')}</div>` : ''}<p class="whyline">${esc(x.why)}</p><details class="ev"><summary>Evidence</summary><ul class="why">${x.reasons.map(t => `<li>${esc(t)}</li>`).join('')}</ul></details>${x.decided_by ? `<p class="tie">Ranked above next: ${esc(x.decided_by)}</p>` : ''}</article>`).join('')}</div>` : '<div class="card empty"><h2>No open offers</h2><p class="muted mt2">When creators apply to you, they appear here ranked.</p></div>'}
   ${r.closed.length ? `<details class="card flat mt"><summary>${r.closed.length} closed</summary>${r.closed.map(a => `<div class="fact"><b class="small">@${esc(a.handle)}</b><span class="small muted">${esc(APP_STATUS[a.status][1])}</span></div>`).join('')}</details>` : ''}`;
-  $$('[data-yes]').forEach(b => b.onclick = async () => { b.disabled = true; const d = await api(`/api/applications/${b.dataset.yes}/accept`, {}); location.hash = `#/deals/${d.id}`; });
+  $$('[data-yes]').forEach(b => b.onclick = async () => { b.disabled = true; try { const d = await api(`/api/applications/${b.dataset.yes}/accept`, {}); location.hash = `#/deals/${d.id}`; } catch (e) { b.disabled = false; toast(e.message); } });
   $$('[data-no]').forEach(b => b.onclick = async () => { await api(`/api/applications/${b.dataset.no}/decline`, {}); route(); });
 }
 
