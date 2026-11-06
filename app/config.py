@@ -14,10 +14,43 @@ for line in (ROOT / '.env').read_text(encoding='utf-8-sig').splitlines() if (ROO
 DB_PATH = os.environ.get('DEAL_DB', str(ROOT / 'deals.db'))
 CRUSTDATA_KEYS = [k.strip() for k in (os.environ.get('CRUSTDATA_API_KEYS') or os.environ.get('CRUSTDATA_API_KEY') or '').split(',') if k.strip()]
 ANTHROPIC_KEY = os.environ.get('ANTHROPIC_API_KEY', '')
-LLM_MODEL = os.environ.get('LLM_MODEL', 'claude-opus-5-5')
+OPENAI_KEY = os.environ.get('OPENAI_API_KEY', '')
+# auto | anthropic | openai. auto uses Anthropic when both keys are set (existing default).
+LLM_PROVIDER = os.environ.get('LLM_PROVIDER', 'auto').strip().lower() or 'auto'
+_LLM_MODEL_ENV = os.environ.get('LLM_MODEL', '').strip()
 LLM_POLISH = os.environ.get('LLM_POLISH', '0') == '1'     # Off by default: the template pitch needs no tokens.
 CACHE_TTL_HOURS = 24 * 7
 MARKET_COUNTRY = os.environ.get('MARKET_COUNTRY', 'India')
+
+_DEFAULT_MODELS = {'anthropic': 'claude-opus-5-5', 'openai': 'gpt-4o-mini'}
+# Kept for callers that read the name; the live model comes from resolve_llm().
+LLM_MODEL = _LLM_MODEL_ENV or _DEFAULT_MODELS['anthropic']
+
+
+def resolve_llm() -> tuple[str | None, str | None, str | None]:
+    """Pick (provider, api_key, model). Returns (None, None, None) when no usable key is set."""
+    want = LLM_PROVIDER
+    if want not in ('auto', 'anthropic', 'openai'):
+        want = 'auto'
+    if want == 'auto':
+        hint = (_LLM_MODEL_ENV or '').lower()
+        openai_hint = hint.startswith(('gpt-', 'o1', 'o3', 'o4'))
+        # Prefer the provider that matches LLM_MODEL when that key exists; else Anthropic, else OpenAI.
+        if openai_hint and OPENAI_KEY:
+            want = 'openai'
+        elif (not openai_hint) and ANTHROPIC_KEY:
+            want = 'anthropic'
+        elif OPENAI_KEY:
+            want = 'openai'
+        elif ANTHROPIC_KEY:
+            want = 'anthropic'
+        else:
+            return None, None, None
+    key = ANTHROPIC_KEY if want == 'anthropic' else OPENAI_KEY
+    if not key:
+        return None, None, None
+    model = _LLM_MODEL_ENV or _DEFAULT_MODELS[want]
+    return want, key, model
 
 # Fees are a disclosed percentage of the agreed price, charged to each side only on closed deals.
 FEE_CREATOR = Fraction(5, 100)

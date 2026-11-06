@@ -115,7 +115,7 @@ uvicorn app.api:app --reload       # open http://localhost:8000, choose Brand, p
 python -m pytest -q                # uses a fake Crustdata and spends no credits
 ```
 
-`ANTHROPIC_API_KEY` is optional. Without it, everything runs on rules and templates. The first request for a new company takes a minute or two because of API rate limits, and later ones come from the cache.
+`ANTHROPIC_API_KEY` or `OPENAI_API_KEY` is optional. Set either (or both); without a key, everything runs on rules and templates. Use `LLM_PROVIDER=openai` or `anthropic` to force a provider when both keys are set; `auto` prefers Anthropic unless `LLM_MODEL` looks like a GPT model. Defaults: `claude-opus-5-5` / `gpt-4o-mini`. The first request for a new company takes a minute or two because of API rate limits, and later ones come from the cache.
 
 ## How it's built
 
@@ -131,10 +131,10 @@ Diagram: [`docs/architecture.md`](docs/architecture.md)
 | Negotiation engine | `app/engine.py`, `app/packages.py` | Terms and price. Pure maths, see `docs/proofs.txt` |
 | Orchestrator | `app/orchestrator.py` | Runs each deal, resumes after a crash, never acts twice |
 | Contract | `app/contract.py` | Contract, gates, fingerprint, invoice |
-| LLM layer | `app/llm.py` | Optional. Fills gaps and polishes text, never decides |
+| LLM layer | `app/llm.py` | Optional Anthropic or OpenAI. Fills gaps and polishes text, never decides |
 | API and UI | `app/api.py`, `app/static/` | FastAPI, plain JS, GSAP, no build step |
 
-**Agents and models:** one rule-based service agent. There is no agent loop, so runs repeat exactly. Optional model: Claude, for gaps in parsing and for polishing a pitch. A changed number makes it discard the polish.
+**Agents and models:** one rule-based service agent. There is no agent loop, so runs repeat exactly. Optional model: Claude or OpenAI, for gaps in parsing and for polishing a pitch. A changed number makes it discard the polish.
 
 **Where it calls Crustdata:** Company Identify (who is this domain or name), Company Enrich (headcount, funding), Person Search and Enrich (sender and contact checks), Company Search and Job Search (brand discovery), Web Fetch and Search (public creator pages, niche evidence).
 

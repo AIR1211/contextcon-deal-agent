@@ -1,5 +1,5 @@
 """The LLM only fills gaps; it never decides. Rules run first, there are no agent loops, and every call has a deterministic
-fallback, so the product works without a key. A deal uses 0 to 2 short calls."""
+fallback, so the product works without a key. A deal uses 0 to 2 short calls. Anthropic or OpenAI, whichever key is set."""
 import hashlib
 import json
 import re
@@ -14,30 +14,79 @@ BRIEF_SCHEMA = {'type': 'object', 'additionalProperties': False, 'required': ['b
     'stories': {'type': ['integer', 'null']}, 'usage_days': {'type': ['integer', 'null']}, 'email': {'type': ['string', 'null']}, 'sender_name': {'type': ['string', 'null']}}}
 
 
+def llm_enabled() -> bool:
+    return config.resolve_llm()[0] is not None
+
+
+def _record_usage(input_tokens: int, output_tokens: int) -> None:
+    used = db.get('llm_usage', 'total') or {'calls': 0, 'input_tokens': 0, 'output_tokens': 0}
+    db.put('llm_usage', 'total', {
+        'calls': used['calls'] + 1,
+        'input_tokens': used['input_tokens'] + input_tokens,
+        'output_tokens': used['output_tokens'] + output_tokens,
+    })
+
+
+def _call_anthropic(key: str, model: str, prompt: str, schema: dict | None, max_tokens: int) -> str | None:
+    import anthropic
+    output = {'effort': 'low'}
+    if schema:
+        output['format'] = {'type': 'json_schema', 'schema': schema}
+    r = anthropic.Anthropic(api_key=key, timeout=40, max_retries=1).beta.messages.create(
+        model=model, max_tokens=max_tokens, betas=['server-side-fallback-2026-07-01'], fallbacks='default',
+        output_config=output, messages=[{'role': 'user', 'content': prompt}])
+    _record_usage(r.usage.input_tokens, r.usage.output_tokens)
+    if r.stop_reason in ('refusal', 'max_tokens'):
+        return None
+    return next((b.text for b in r.content if b.type == 'text'), None)
+
+
+def _openai_schema(schema: dict) -> dict:
+    """OpenAI strict JSON schema needs every property listed in required."""
+    props = schema.get('properties') or {}
+    required = list(schema.get('required') or props.keys())
+    for name in props:
+        if name not in required:
+            required.append(name)
+    return {**schema, 'additionalProperties': False, 'required': required, 'properties': props}
+
+
+def _call_openai(key: str, model: str, prompt: str, schema: dict | None, max_tokens: int) -> str | None:
+    from openai import OpenAI
+    kwargs: dict = {
+        'model': model,
+        'messages': [{'role': 'user', 'content': prompt}],
+        'max_completion_tokens': max_tokens,
+        'timeout': 40,
+    }
+    if schema:
+        kwargs['response_format'] = {
+            'type': 'json_schema',
+            'json_schema': {'name': 'extract', 'strict': True, 'schema': _openai_schema(schema)},
+        }
+    r = OpenAI(api_key=key, max_retries=1).chat.completions.create(**kwargs)
+    u = r.usage
+    if u:
+        _record_usage(u.prompt_tokens or 0, u.completion_tokens or 0)
+    choice = r.choices[0] if r.choices else None
+    if not choice or choice.finish_reason == 'content_filter':
+        return None
+    return (choice.message.content or None)
+
+
 def _ask_model(prompt: str, schema: dict | None = None, max_tokens: int = 1000) -> str | None:
     """One short call, never a loop. Identical prompts are answered from the cache at no cost."""
-    if not config.ANTHROPIC_KEY:
+    provider, key, model = config.resolve_llm()
+    if not provider:
         return None
-    key = 'llm:' + hashlib.sha256((config.LLM_MODEL + prompt + json.dumps(schema, sort_keys=True)).encode()).hexdigest()
-    hit = db.cache_get(key)
+    cache_key = 'llm:' + hashlib.sha256((provider + model + prompt + json.dumps(schema, sort_keys=True)).encode()).hexdigest()
+    hit = db.cache_get(cache_key)
     if hit:
         return hit[0]
     try:
-        import anthropic
-        output = {'effort': 'low'}
-        if schema:
-            output['format'] = {'type': 'json_schema', 'schema': schema}
-        r = anthropic.Anthropic(api_key=config.ANTHROPIC_KEY, timeout=40, max_retries=1).beta.messages.create(
-            model=config.LLM_MODEL, max_tokens=max_tokens, betas=['server-side-fallback-2026-07-01'], fallbacks='default',
-            output_config=output, messages=[{'role': 'user', 'content': prompt}])
-        used = db.get('llm_usage', 'total') or {'calls': 0, 'input_tokens': 0, 'output_tokens': 0}
-        used = {'calls': used['calls'] + 1, 'input_tokens': used['input_tokens'] + r.usage.input_tokens, 'output_tokens': used['output_tokens'] + r.usage.output_tokens}
-        db.put('llm_usage', 'total', used)
-        if r.stop_reason in ('refusal', 'max_tokens'):
-            return None
-        text = next((b.text for b in r.content if b.type == 'text'), None)
+        text = _call_anthropic(key, model, prompt, schema, max_tokens) if provider == 'anthropic' else _call_openai(key, model, prompt, schema, max_tokens)
         if text:
-            db.cache_put(key, text, now(), 0)
+            db.cache_put(cache_key, text, now(), 0)
         return text
     except Exception:      # Any model failure falls through to the deterministic path.
         return None
